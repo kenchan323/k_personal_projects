@@ -10,7 +10,7 @@ from email.mime.text import MIMEText
 def send_email(message):
     s = smtplib.SMTP('smtp-mail.outlook.com', 587) #Change smtp for Outlook
     s.starttls()
-    s.login("kencheckprice@hotmail.com", "checkprice323")
+    s.login(";", "checkprice323")
 
     msg = MIMEMultipart()       # create a message
 
@@ -20,9 +20,9 @@ def send_email(message):
     # print(message)
 
     # setup the parameters of the message
-    msg['From']= "kencheckprice@hotmail.com"
-    msg['To']='kenchan323@hotmail.com'
-    msg['Subject']="Test"
+    msg['From'] = "kencheckprice@hotmail.com"
+    msg['To'] = 'kenchan323@hotmail.com'
+    msg['Subject'] = "Test"
 
     # add in the message body
     msg.attach(MIMEText(message, 'plain'))

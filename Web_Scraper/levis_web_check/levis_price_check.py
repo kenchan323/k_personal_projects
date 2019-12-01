@@ -5,15 +5,9 @@ from selenium.webdriver.support.ui import Select
 from selenium.webdriver.common.keys import Keys
 from selenium import webdriver
 import selenium.common.exceptions as selenium_exception
-from time import sleep
-import pandas as pd
 import datetime as dt
 import pickle
 import hotmail
-import tabula
-import time
-import os
-import sys
 
 options = webdriver.ChromeOptions()
 download_folder = "reports"
@@ -48,6 +42,9 @@ class Clothing:
                 # Retail price and soft sale price (e.g. temporary?) and hard sale (clearance?)
 
                 prices_string = [x.replace("£", "") for x in prices_string if x != ""]
+                prices_string = [x.split(" ") for x in prices_string]
+                # Flatten list of list
+                prices_string = [item for sublist in prices_string for item in sublist]
                 if len(prices_string) != 0:
                   break
             prices_float = [float(x) for x in prices_string]
