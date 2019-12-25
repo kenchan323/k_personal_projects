@@ -67,7 +67,7 @@ class Clothing:
 
 
 
-def get_levis_listings(search_string, driver, pickle_file="C:\\dev\\Web_Scraper\\levis_510.obj"):
+def get_levis_listings(search_string, driver, pickle_file="C:\\dev\\web_scraper\\levis_510.obj"):
     levis_root = "https://www.levi.com"
     driver.get("https://www.levi.com/GB/en_GB/search/{}".format(search_string))
     listing_elements = driver.find_elements_by_class_name("name")
