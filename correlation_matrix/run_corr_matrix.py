@@ -27,11 +27,11 @@ def ultra_metric(rho):
 
 start_date = None
 end_date = None
-#start_date = dt.datetime(2019, 6, 1)
-#end_date = dt.datetime(2019, 12, 1)
+# start_date = dt.datetime(2019, 6, 1)
+# end_date = dt.datetime(2019, 12, 1)
 
 # Cluster count
-n_clusters = 15
+n_clusters = 10
 # Perplexity hyperparameter for TSNE
 perp = 5
 
@@ -42,11 +42,25 @@ df_corr_distance = df_corr.loc[:].apply(ultra_metric)
 # 2D array
 ndarray_distance = df_corr_distance.values
 list_tickers = df_corr.index.values
+
+dendro_method = "complete"
+links = linkage(squareform(ndarray_distance), method=dendro_method)
+d = dendrogram(links, labels=list_tickers)
+
+if start_date == None and end_date == None:
+    plt.title("DJ Dendrogram, Method={}, 20181226-20191225".format(dendro_method))
+else:
+    plt.title("DJ Dendrogram, Method={}, {}-{}".format(dendro_method,
+                                                    start_date.strftime("%Y%m%d"),
+                                                    end_date.strftime("%Y%m%d")))
+
 # Linkage must be average if using a precomputed distance matrix
 cluster = AgglomerativeClustering(n_clusters=n_clusters, affinity="precomputed", linkage="average")
 cluster_labels = cluster.fit_predict(ndarray_distance)
+
 # Using TSNE to project a set of points based on a precomputed distance matrix
 tsne_projection = TSNE(n_components=2, perplexity=perp, metric="precomputed", random_state=1).fit_transform(ndarray_distance)
+
 
 ax_1 = plt.figure()
 colour_palette = sns.color_palette("Paired", 36)
