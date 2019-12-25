@@ -31,9 +31,9 @@ end_date = None
 # end_date = dt.datetime(2019, 12, 1)
 
 # Cluster count
-n_clusters = 10
+n_clusters = 14
 # Perplexity hyperparameter for TSNE
-perp = 5
+perp = 3
 
 # Fetching a correlation matrix
 df_corr = build_corr.parse_csv_returns(rho_matrix=True, start_date=start_date, end_date=end_date, use_name=True).dropna()
@@ -43,19 +43,25 @@ df_corr_distance = df_corr.loc[:].apply(ultra_metric)
 ndarray_distance = df_corr_distance.values
 list_tickers = df_corr.index.values
 
-dendro_method = "complete"
-links = linkage(squareform(ndarray_distance), method=dendro_method)
-d = dendrogram(links, labels=list_tickers)
+dendro_linkage = "complete"
+# "ward" cannot be used when a distance matrix is use (see below which comes from documentation page
+'''
+Methods ‘centroid’, ‘median’ and ‘ward’ are correctly defined only if Euclidean pairwise metric is used. 
+If y is passed as precomputed pairwise distances, then it is a user responsibility to assure that these 
+distances are in fact Euclidean, otherwise the produced result will be incorrect.
+'''
+links = linkage(squareform(ndarray_distance), method=dendro_linkage)
+d = dendrogram(links, labels=[x[:8] for x in list_tickers])
 
 if start_date == None and end_date == None:
-    plt.title("DJ Dendrogram, Method={}, 20181226-20191225".format(dendro_method))
+    plt.title("DJ Dendrogram, Linkage={}, 20181226-20191225".format(dendro_linkage))
 else:
-    plt.title("DJ Dendrogram, Method={}, {}-{}".format(dendro_method,
+    plt.title("DJ Dendrogram, Linkage={}, {}-{}".format(dendro_linkage,
                                                     start_date.strftime("%Y%m%d"),
                                                     end_date.strftime("%Y%m%d")))
 
 # Linkage must be average if using a precomputed distance matrix
-cluster = AgglomerativeClustering(n_clusters=n_clusters, affinity="precomputed", linkage="average")
+cluster = AgglomerativeClustering(n_clusters=n_clusters, affinity="precomputed", linkage=dendro_linkage)
 cluster_labels = cluster.fit_predict(ndarray_distance)
 
 # Using TSNE to project a set of points based on a precomputed distance matrix
@@ -76,11 +82,11 @@ for i, ticker in enumerate(list_tickers):
     if start_date == None and end_date == None:
         plt.title("DJ Rho Clustering - "
                   "n_cluster={}, "
-                  "Perplex={}, Metric={}, Linkage=average, 20181226-20191225 ".format(n_clusters, perp, "ultra"))
+                  "Perplex={}, Metric={}, Linkage={}, 20181226-20191225 ".format(n_clusters, perp, "ultra", dendro_linkage))
     else:
         plt.title("DJ Rho Clustering - "
                   "n_cluster={}, "
-                  "Perplex={}, Metric={}, Linkage=average, {}-{}".format(n_clusters, perp, "ultra",
+                  "Perplex={}, Metric={}, Linkage={}, {}-{}".format(n_clusters, perp, "ultra", dendro_linkage,
                                                                          start_date.strftime("%Y%m%d"),
                                                                          end_date.strftime("%Y%m%d")))
 plt.show()
