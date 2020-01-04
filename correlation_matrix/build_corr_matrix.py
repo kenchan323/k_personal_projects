@@ -1,11 +1,20 @@
 import pandas as pd
 import os
 
-
 dir_project = os.path.dirname(__file__)
-dir_csv_folders = os.path.join(dir_project, "dj_mem_ret_yahoo_finance")
+dir_csv_folders = os.path.join(dir_project, "dj_stock_returns_yahoo_finance")
 
 def parse_csv_returns(dir_returns_files=dir_csv_folders, rho_matrix=False, start_date=None, end_date=None, use_name=False):
+    '''
+    A helper function which reads the individual daily prices csv's of the different Dow Jones constituents then return
+    a correlation matrix (as a pandas DataFrame) based on the input start and end dates
+    :param dir_returns_files: str - directory of where the daily prices csv's are kept
+    :param rho_matrix: boolean - if True then return rho matrix, else returns df with daily returns on constituents
+    :param start_date: datetime - start date of evaluation period
+    :param end_date: datetiem - end date of evaluation period
+    :param use_name: boolean - if True then show stock name, else show ticker
+    :return: pandas Dataframe of either dialy returns or correlation matrix of daily returns
+    '''
     for root, dirs, files in os.walk(dir_csv_folders):
         csv_files = files # list of csv file names
         break
