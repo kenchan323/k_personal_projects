@@ -15,7 +15,7 @@ def parse_csv_returns(dir_returns_files=dir_csv_folders, rho_matrix=False, start
     :param use_name: boolean - if True then show stock name, else show ticker
     :return: pandas Dataframe of either dialy returns or correlation matrix of daily returns
     '''
-    for root, dirs, files in os.walk(dir_csv_folders):
+    for root, dirs, files in os.walk(dir_returns_files):
         csv_files = files # list of csv file names
         break
     df_output = pd.DataFrame()
