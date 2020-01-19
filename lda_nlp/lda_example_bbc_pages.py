@@ -1,5 +1,8 @@
 import sys
+import os
 import pandas as pd
+
+# NLP packages
 import gensim
 from nltk.stem import WordNetLemmatizer, SnowballStemmer
 from gensim.models import Phrases
@@ -7,15 +10,16 @@ stemmer = SnowballStemmer("english")
 import nltk
 nltk.download('wordnet')
 
+
 try:
-    import lda_helper as helper
+    import nlp_helper as helper
 except ImportError:
-    sys.path.insert(0, "C:\\dev\\ken_personal_projects\\lda_nlp")
+    sys.path.insert(0, "C:\\dev\\k_personal_projects\\lda_nlp")
 finally:
-    import lda_helper as helper
+    import nlp_helper as helper
 
 
-
+dir_lda = "C:\\dev\\k_personal_projects\\lda_nlp"
 '''
 Very basic script to do apply LDA (Latent Dirichlet allocation) on either:
 Around 2500 BBC news article between 2004 and 2005 from the BBC Datasets website
@@ -42,7 +46,7 @@ output_path_xlsx_pre = "C:\\dev\\ken_personal_projects\\lda_nlp\\results\\lda_re
 # NOUN and PROPN (proper noun). This gives you the freedom to attempt different methods of pre-processing
 # If use_pre_processed = False, then we use a pickled post-process (by Ken) corpus, which is already
 # lemmatised, meaning we have lost the information needed to do POS tagging
-use_pre_processed = False
+use_unprocessed_corpus = True
 # If you want to check for bi-gram in the text
 do_bigram = True
 # Number of topics to trained the LDA model for
@@ -59,52 +63,61 @@ User specified parameters above
 The path to the pickled dictionary where key = article_category_id, value = post-processed 
 list of (stemmed and lemmatised) word strings
 '''
-pickled_bbc_pages = "C:\\dev\\ken_personal_projects\\lda_nlp\\bbc_pages\\pickled_dict_bbc_pages_04_05"
-pickled_preprocessed_bbc_pages =  "C:\\dev\\ken_personal_projects\\lda_nlp\\bbc_pages\\pickled_dict_bbc_pages_04_05_pre_processed"
-pickled_bbc_noun_stemmed_w_bigram = "C:\\dev\\ken_personal_projects\\lda_nlp\\bbc_pages\\pickled_bbc_article_dict_stemmed_w_bigram"
+pickled_raw_bbc_pages = os.path.join(dir_lda, "bbc_raw_articles\\pickled_bbc_raw_articles.obj")
+pickled_stem_token_bbc_pages = os.path.join(dir_lda, "bbc_raw_articles\\pickled_bbc_tokenised_articles.obj")
+pickled_bbc_noun_stemmed_w_bigram = os.path.join(dir_lda, "bbc_raw_articles\\pickled_bbc_article_dict_stemmed_w_bigram.obj")
 
-if use_pre_processed:
-    dict_bbc_articles = helper.load_pickle(pickled_preprocessed_bbc_pages)
+if use_unprocessed_corpus:
+    # Load a dictionary containing the raw articles (un-tokenised)
+    dict_bbc_articles = helper.load_pickle(pickled_raw_bbc_pages)
     # Load a temporary tokenised copy for doing bigram
-    dict_bbc_articles_processed = helper.load_pickle(pickled_bbc_pages)
+    dict_bbc_articles_processed = helper.load_pickle(pickled_stem_token_bbc_pages)
 
-    '''
-    dict_bbc_articles_stemmed = {}
-    dict_extra_bigram = {}
-    for tag, article in dict_bbc_articles.items():
-        dict_extra_bigram[tag] = []
-        dict_bbc_articles_stemmed[tag] = []
+    if os.path.exists(pickled_bbc_noun_stemmed_w_bigram):
+        # ....or just load a pickled dictionary that Ken had previously done
+        dict_bbc_articles_stemmed = helper.load_pickle(pickled_bbc_noun_stemmed_w_bigram)
+    else:
+        # or we build it!
+        dict_bbc_articles_stemmed = {}
+        dict_extra_bigram = {}
+        for tag, article in dict_bbc_articles.items():
+            dict_extra_bigram[tag] = []
+            dict_bbc_articles_stemmed[tag] = []
 
-    # For each article, find bigram
-    bigram = Phrases(dict_bbc_articles_processed.values(), min_count=5)
-    for id, content in dict_bbc_articles_processed.items():
-        for token in bigram[content]:
-            if '_' in token:
-                dict_extra_bigram[id].append(token)
+        # For each article, find bigram
+        bigram = Phrases(dict_bbc_articles_processed.values(), min_count=5)
+        for id, content in dict_bbc_articles_processed.items():
+            for token in bigram[content]:
+                if '_' in token:
+                    dict_extra_bigram[id].append(token)
 
-    # Then we do POS tagging on the original pre-processed text and keep only NOUN and PROPNOUN
-    for id, content in dict_bbc_articles.items():
-        # Keep only nouns and pronouns
-        list_nouns = helper.pos_tag_filter_for_noun_pronoun(content)
-        for noun in list_nouns:
-            # Lemmatise each noun/pronoun
-            dict_bbc_articles_stemmed[id].append(stemmer.stem(WordNetLemmatizer().lemmatize(noun, pos='n')))
-        dict_bbc_articles_stemmed[id].extend(dict_extra_bigram[id])
-    '''
-    # ....or just load a pickled dictionary that Ken had previously done
-    dict_bbc_articles_stemmed = helper.load_pickle(pickled_bbc_noun_stemmed_w_bigram)
+        # Then we do POS tagging on the original pre-processed text and keep only NOUN and PROPNOUN
+        for id, content in dict_bbc_articles.items():
+            # Keep only nouns and pronouns
+            list_nouns = helper.pos_tag_filter_for_noun_pronoun(content)
+            for noun in list_nouns:
+                # Lemmatise each noun/pronoun
+                dict_bbc_articles_stemmed[id].append(stemmer.stem(WordNetLemmatizer().lemmatize(noun, pos='n')))
+            dict_bbc_articles_stemmed[id].extend(dict_extra_bigram[id])
+        # Let's pickle what we have done
+        helper.save_pickle(dict_bbc_articles_stemmed, pickled_bbc_noun_stemmed_w_bigram)
+
 
     # Remove all words that only have 1 character
     for title, content in dict_bbc_articles_stemmed.items():
         dict_bbc_articles_stemmed[title] = [word for word in content if len(word) > 1]
 
+    # list_of_content is a list of lists
     list_of_content = [v for k, v in dict_bbc_articles_stemmed.items()]
 
-# otherwise if use_pre_processed == False
+
 else:
+    # otherwise if use_unprocessed_corpus == False
+    # So we just use a processed (stemmed and tokenised) corpus
     # Dictionary of lists with already stemmed words
-    dict_bbc_articles = helper.load_pickle(pickled_bbc_pages)
-    #list_of_content is a list of list of words
+    dict_bbc_articles = helper.load_pickle(pickled_stem_token_bbc_pages)
+
+    # list_of_content is a list of list of words
     list_of_content = [v for k, v in dict_bbc_articles.items()]
     if do_bigram:
         # Add bigrams and trigrams to docs (only ones that appear 5 times or more).
@@ -115,7 +128,7 @@ else:
                     # Token is a bigram, append to document.
                     list_of_content[idx].append(token)
 
-# list_of_content is a list of lists
+
 
 # df_param is a DataFrame to keep track of the parameter we set. This will be a sheet in the output spreadsheet
 df_param = pd.DataFrame(columns=["k",
@@ -123,7 +136,7 @@ df_param = pd.DataFrame(columns=["k",
                                  "rm_words_seen_in_more_than_n_pct_doc",
                                  "added_bigram",
                                  "use_pre_processed_pos_noun"])
-df_param.loc[0] = [k, no_word_from_less_than_doc, no_word_from_more_than_pct_doc, do_bigram, use_pre_processed]
+df_param.loc[0] = [k, no_word_from_less_than_doc, no_word_from_more_than_pct_doc, do_bigram, use_unprocessed_corpus]
 
 '''
 for idx in range(len(list_of_content)):
@@ -164,7 +177,7 @@ for idx, topic in lda_model.print_topics(num_words=10):
     print('Topic: {} \nWords: {}'.format(idx, topic))
 
 # Now classify the original doc
-dict_bbc_articles = helper.load_pickle(pickled_bbc_pages)
+dict_bbc_articles = helper.load_pickle(pickled_raw_bbc_pages)
 # With hide_article_idx=True, in the output xlsx we only see each document's category, but not ID
 result = helper.classify_bbc_dict(dict_bbc_articles, lda_model, dictionary, hide_article_idx=False)
 helper.out_to_excel(result, output_path_xlsx_pre, df_param)
