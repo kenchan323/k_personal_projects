@@ -105,7 +105,7 @@ driver.get(URL_SENATE_DISCLOSURE)
 # Now need to take check box for agreement
 elm_agree_statement = driver.find_element_by_id("agree_statement")
 elm_agree_statement.click()
-
+# We put in a "From Date" to begin to search for submission
 elm_start_date_search_in = driver.find_element_by_id("fromDate")
 elm_start_date_search_in.send_keys(str_earliest_search_dt)
 elm_start_date_search_in.send_keys()
@@ -117,7 +117,7 @@ elm_periodic_trans.click()
 elm_search_button = driver.find_elements_by_class_name("btn-primary")[0]
 elm_search_button.click()
 
-time.sleep(2) # let the page load
+time.sleep(2) # let the page load a bit
 # Find max number of page (last page button)
 elm_final_page = driver.find_elements_by_class_name("paginate_button")[-2]
 final_page_count = int(elm_final_page.text)
