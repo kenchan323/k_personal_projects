@@ -3,7 +3,7 @@
 correlation_matrix
 -
     - Performing correlation clustering on Dow Jones stock returns then visualise clustering
-    using tsne (t-distributed stochastic neighbouring) technique
+    using tsne (t-distributed stochastic neighbouring) technique.
     
 lda_nlp
 -
@@ -11,6 +11,12 @@ lda_nlp
     Using LDA we cna detect k number of topics (k being a hyper-parameter) and see the "weights" of words in each
     of these k topics.
     LDA is a topic modelling technique within the domain of Natural Lanaguage Processing.
+
+    
+portfolio_construction
+-
+    - To solve for portfolio risk budgeting optimal solutions using both convex and non-convex problems. It can be shown
+    that the former gives a more optimal solution than the latter. 
 
 senator_trade_backtest (WIP)
 -
