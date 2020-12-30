@@ -2,6 +2,8 @@ import numpy as np
 from scipy.optimize import minimize
 import cvxpy as cp
 
+import portfolio_construction.scipy_port_constraints as pc
+
 '''
 Sample script by kenchan323 (https://github.com/kenchan323) to perform portfolio risk budgeting optimisation under two
 different approaches (convex and non-convex). A basic dummy 4 by 4 covariance matrix is used and the script shows that
@@ -85,21 +87,7 @@ def _non_convex_risk_budget_objective(x, cov, x_target):
     return sse
 
 
-def _total_weight_constraint(x):
-    '''
-    Total weight constraint to be used by scipy solver
-    :param x:
-    :return:
-    '''
-    return np.sum(x)-1.0
 
-def _long_only_constraint(x):
-    '''
-    Long only constraint to be used by scipy solver to ensure w > 0
-    :param x:
-    :return:
-    '''
-    return x
 
 def _risk_budget_obj_failed_attempt(cov, w_target):
     '''
@@ -133,8 +121,8 @@ cov = [[1.23, 0.375, 0.7, 0.3],
        [0.3, 0.135, -0.32, 0.52]]
 
 # 1) Let's solve it as a non-convex problem (using scipy solver)
-cons = ({'type': 'eq', 'fun': _total_weight_constraint},
-        {'type': 'ineq', 'fun': _long_only_constraint})
+cons = ({'type': 'eq', 'fun': pc.total_weight_constraint},
+        {'type': 'ineq', 'fun': pc.long_only_constraint})
 res = minimize(_non_convex_risk_budget_objective, w_0, args=(cov, x_target),
                method='SLSQP', constraints=cons, options={'disp': True})
 w_sol_non_convex = res.x

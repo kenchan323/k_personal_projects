@@ -15,8 +15,9 @@ lda_nlp
     
 portfolio_construction
 -
-    - To solve for portfolio risk budgeting optimal solutions using both convex and non-convex problems. It can be shown
+    - script_risk_budget.py: To solve for portfolio risk budgeting optimal solutions using both convex and non-convex problems. It can be shown
     that the former gives a more optimal solution than the latter. 
+    - script_max_diversification.py: To solve for a MDP (maximum diversification portfolio) using scipy optimiser.
 
 senator_trade_backtest (WIP)
 -
