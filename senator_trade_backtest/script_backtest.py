@@ -1,5 +1,7 @@
-import datetime as dt
 import yfinance
+
+import datetime as dt
+import time
 import pandas as pd
 from pandas.tseries.offsets import BDay
 
@@ -13,7 +15,7 @@ return of S&P 500 to determine if positive excess return persists.
 @kenchan323
 2020-12-26
 '''
-PATH_TRADE_DATA = r"C:\Users\User\Documents\python_projects\senator_trade_backtest_raw.csv"
+PATH_TRADE_DATA = r"C:\Users\User\Documents\python_projects\senator_trade_submitted_trades_raw.csv"
 _excluded_types = ["Corporate Bond"]
 _stock_exchanges = ["NASDAQ", "NYSE"]
 _excluded_transaction_types = ["Exchange"]
@@ -25,6 +27,15 @@ _forward_eval_horizon_d = {"2D": 2,
                            "3M": 66,
                            "6M": 126,
                            "1Y": 252}
+# Bucket the trade sizes
+_trade_amount_buckets = {"$1,001 - $15,000": 0,
+                         "$15,001 - $50,000": 1,
+                         "$50,001 - $100,000": 2,
+                         "$100,001 - $250,000": 3,
+                         "$250,001 - $500,000": 4,
+                         "$500,001 - $1,000,000": 5,
+                         "$1,000,001 - $5,000,000": 6,
+                         "$5,000,001 - $25,000,000": 7}
 ticker_spx = "^GSPC"
 
 
@@ -64,8 +75,19 @@ def _backtest_post_trigger_rets(df_stock_ret, dt_trigger, trg_direction, df_bmk_
     # Let's create a nested dict of results then convert into a pandas DataFrame
     i = 0 # counter to index entry to output DataFrame
     for str_horizon, int_days in _forward_eval_horizon_d.items():
-        start_iloc = df_stock_ret.index.get_loc(dt_trigger)
-        end_iloc = start_iloc + int_days
+        try:
+            start_iloc = df_stock_ret.index.get_loc(dt_trigger)
+        except KeyError:
+            # We don't have stock return data for this ticker on the date the senator trade was submitted
+            if abs(dt_trigger - df_stock_ret.index.min()).days <= 2:
+                # If the earliest available date in the stock return series is close enough to the trade submission date
+                # then let's call it that
+                start_iloc = 0
+            else:
+                return {}
+
+        # We minus one because we want to capture return from t0 to tn-1 (so n days)
+        end_iloc = start_iloc + int_days - 1
         if end_iloc >= len(df_stock_ret.index):
             # Too far into the future, we don't have these price data
             continue
@@ -117,31 +139,71 @@ df_trades["Asset Type"] = df_trades.apply(lambda x: "Stock" if (x["Asset Type"] 
 df_trades = df_trades[df_trades["Asset Type"] != "nan"]
 # Drops rows with no tickers
 df_trades = df_trades[df_trades["Ticker"] != "--"]
+# We bucket each trade into buckets based on the amount
+df_trades["Trade_Size_Bucket"] = df_trades["Amount"].map(_trade_amount_buckets)
+# We will focus on bucket 3 or above (> 100k)
+df_trades = df_trades[df_trades["Trade_Size_Bucket"] >= 3]
 
-# Try "BIIB" as that has appeared the most in this segment of data("KORS" doesn't work, not on Yahoo Finance)
-earliest_date = df_trades["Transaction Date"].min()
-earliest_date_minus_1 = earliest_date - BDay(1)
-df_trades_biib = df_trades[df_trades["Ticker"] == "BIIB"]
-# Use yfinance to get some price return data for "BIIB" (Biogen Inc)
-df_biib_ret = _get_daily_return_series("BIIB",
-                                       dt_start=earliest_date_minus_1,
-                                       dt_end=dt.datetime.today()).dropna()
-# Let's get S&P 500 price return too
+df_trades = df_trades.reset_index(drop=True)
+
+# The earliest date across the full table of senator trades
+earliest_date_minus_1_all = df_trades["Transaction Date"].min() - BDay(1)
+
+# Let's get S&P 500 price return too so we can calculate excess return
 df_spx_ret = _get_daily_return_series(ticker_spx,
-                                      dt_start=earliest_date_minus_1,
+                                      dt_start=earliest_date_minus_1_all,
                                       dt_end=dt.datetime.today()).dropna()
 
-import functools
-list_dict_res = [_backtest_post_trigger_rets(df_stock_ret=df_biib_ret,
+dict_stock_ret = {}
+for ticker_i, df_ticker in df_trades.groupby("Ticker"): # focusing on all submitted trades of one stock
+    earliest_date_minus_1 = df_ticker["Transaction Date"].min() - BDay(1)
+    print(f"Getting price return for {ticker_i} since {earliest_date_minus_1.strftime('%Y-%m-%d')}...")
+    # Use yfinance to get price return data for this particular ticker
+    df_stock_ret = _get_daily_return_series(ticker_i,
+                                            dt_start=earliest_date_minus_1,
+                                            dt_end=dt.datetime.today()).dropna()
+    time.sleep(2) # pace out the requests?
+    if len(df_stock_ret) == 0:
+        # Maybe this stock has been de-listed
+        continue
+    # Will store this return series in a dict
+    dict_stock_ret[ticker_i] = df_stock_ret
+
+# Ok now we loop over each senator trade and back-testing based on the stock return series we retrieved
+
+# Only do back-testing IF we have stock return for a ticker
+list_dict_res = [_backtest_post_trigger_rets(df_stock_ret=dict_stock_ret[row["Ticker"]],
                                              dt_trigger=row["Transaction Date"],
                                              trg_direction=row["DIRECTION"],
                                              df_bmk_ret=df_spx_ret,
-                                             Senator="Sheldon,Whitehouse") for idx, row in df_trades_biib.iterrows()]
+                                             Senator=row["Senator"]) for idx, row in df_trades.iterrows()
+                 if row["Ticker"] in dict_stock_ret.keys()]
+
 df_blank = pd.DataFrame()
 # We add a blank pandas DataFrame to the first element so we can use reduce to append all the dict's together into a
 # DataFrame
 list_dict_res.insert(0, df_blank)
 # Append recursively all the trade summary into a big pandas DataFrame
+import functools
 df_output_summary = functools.reduce(lambda df, dict_res:
                                      df.append(pd.DataFrame.from_dict(dict_res, orient="index"), ignore_index=True),
                                      list_dict_res)
+# Now we have a trade summary of all the backtest driven trades
+df_output_summary.to_csv("senator_backtest_summary.csv", index=False)
+
+'''
+Some analysis of the strategy
+'''
+import seaborn as sns
+import matplotlib.pyplot as plt
+df_output_summary["ER"] = df_output_summary["Trade_Return"] - df_output_summary["Bmk_Return"]
+# Only focus on the subsequent 1 month trades
+df_output_summary_1m = df_output_summary[df_output_summary["Horizon"] == "1M"]
+# Only focus on the subsequent 1 week trades
+df_output_summary_1w = df_output_summary[df_output_summary["Horizon"] == "1W"]
+sns.distplot(df_output_summary_1m["ER"])
+plt.suptitle("1m Excess Return (v long SPX) Distribution of L/S trades from following Senator trades (>100k size)")
+# See which Senator provides best l/s signals over a 1 week horizon
+df_senator_1w = df_output_summary_1w.groupby("Senator")["ER"].describe()
+# Same but over 1 month horizon
+df_senator_1m = df_output_summary_1m.groupby("Senator")["ER"].describe()

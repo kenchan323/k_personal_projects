@@ -159,4 +159,4 @@ while curr_page_count <= final_page_count:
 df = pd.DataFrame(columns=list_d[0].keys())
 for dict_entry in list_d:
     df = df.append(dict_entry, ignore_index=True)
-df.to_csv("scraped_senate_trades.csv")
+df.to_csv("senator_trade_submitted_trades_raw.csv")
