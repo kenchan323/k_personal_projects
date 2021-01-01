@@ -7,7 +7,7 @@ correlation_matrix
     
 lda_nlp
 -
-    - Training a LDA (LLatent Dirichlet allocation) model on a corpus of ~2500 BBC News articles from 2004/2005.
+    - Training a LDA (Latent Dirichlet Allocation) model on a corpus of ~2500 BBC News articles from 2004/2005.
     Using LDA we cna detect k number of topics (k being a hyper-parameter) and see the "weights" of words in each
     of these k topics.
     LDA is a topic modelling technique within the domain of Natural Lanaguage Processing.
@@ -15,22 +15,24 @@ lda_nlp
     
 portfolio_construction
 -
-    - script_risk_budget.py: To solve for portfolio risk budgeting optimal solutions using both convex and non-convex problems. It can be shown
-    that the former gives a more optimal solution than the latter. 
+    - script_risk_budget.py: To solve for portfolio risk budgeting optimal solutions using both convex and non-convex 
+    problems. It can be shown that the former gives a more optimal solution than the latter (as a global minima is
+    guaranteed to be found in a convex problem). 
     - script_max_diversification.py: To solve for a MDP (maximum diversification portfolio) using scipy optimiser.
 
-senator_trade_backtest (WIP)
+senator_trade_backtest
 -
     - Using Selenium Chrome webdriver, scrape down all the submitted trades of US senator from the US Senate financial
     disclousre webpage. Then carry out event study to understand subsequent performance of stocks over a certain horizon
-    after each Senator trade was carried out (using yfinance - Yahoo Finance API as price data source).
+    after each Senator trade was carried out (using yfinance - Yahoo Finance API as pricing data source). So effectively 
+    treating each Senator's trade as a long/short signal.
 
 web_scraper / fsa_rating (WIP)
 -
     - Scrape (using Selenium with Chrome driver) FSA (Food Standards Agency) hygiene ratings on takeaways restaurants
-    within proximity of a postcode based on JustEat listings
+    within proximity of a postcode based on JustEat listings.
     
 web_scraper / levis_web_check (WIP)
 -
     - Continuous price scraping (using Selenium with Chrome driver) on selected item listings on the Levis UK e-commerce 
-    store. Once a price drop (or change) is detected, an email alert is sent to the user 
+    store. Once a price drop (or change) is detected, an email alert is sent to the user.
