@@ -13,7 +13,7 @@ return of S&P 500 to determine if positive excess return persists.
 @kenchan323
 2020-12-26
 '''
-PATH_TRADE_DATA = r"C:\Users\User\Documents\python_projects\senator_trade_backtest.csv"
+PATH_TRADE_DATA = r"C:\Users\User\Documents\python_projects\senator_trade_backtest_raw.csv"
 _excluded_types = ["Corporate Bond"]
 _stock_exchanges = ["NASDAQ", "NYSE"]
 _excluded_transaction_types = ["Exchange"]

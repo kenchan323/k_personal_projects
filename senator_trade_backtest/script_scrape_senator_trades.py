@@ -129,9 +129,9 @@ list_d = []
 while curr_page_count <= final_page_count:
     at_first_page = (curr_page_count == 1)
     if not at_first_page:
-        print(f"About to move to Page {curr_page_count + 1} .....")
-        _click_next_page(driver, curr_page_count)
-        curr_page_count = curr_page_count + 1
+        print(f"About to move to Page {curr_page_count} .....")
+        _click_next_page(driver, curr_page_count - 1)
+
 
     # Get current page count
     curr_page_count = _get_current_page_count(driver)
@@ -146,12 +146,14 @@ while curr_page_count <= final_page_count:
     # sub_link = 'https://efdsearch.senate.gov/search/view/ptr/05f5d46b-c3b0-4ef3-aaa6-a1f49574b5af/'
     # page = requests.get(sub_link)
     # soup = BeautifulSoup(page.content, 'html.parser')
-    for idx, link in enumerate(list_doc_links):
+    for idx, link in enumerate(list_doc_links[0:2]):
         person = list_full_name[idx]
         ret_dict = _open_doc_page_parse(link, Senator=person)
         if ret_dict == None:
             continue
         list_d.extend(ret_dict)
+
+    curr_page_count = curr_page_count + 1
 
 # We loop through all the dict objects in the list and append them into a pandas DataFrame
 df = pd.DataFrame(columns=list_d[0].keys())
