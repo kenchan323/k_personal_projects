@@ -1,5 +1,10 @@
 #kenchan323 Personal Projects
 
+trading (WIP)
+-
+    - A simple backtesting engine for assessing portfolio performance of a given timeseries of asset weight and asset prices
+    - more to come...
+
 correlation_matrix
 -
     - Performing correlation clustering on Dow Jones stock returns then visualise clustering
