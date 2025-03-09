@@ -1,11 +1,4 @@
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support.ui import Select
-from selenium.webdriver.common.keys import Keys
 from selenium import webdriver
-import selenium.common.exceptions as selenium_exception
-from time import sleep
 import pandas as pd
 import fsa_rating
 
