@@ -2,7 +2,7 @@ import numpy as np
 from scipy.optimize import minimize
 import cvxpy as cp
 
-import portfolio_construction.scipy_port_constraints as pc
+import finance.portfolio_construction.scipy_port_constraints as pc
 
 '''
 Sample script by kenchan323 (https://github.com/kenchan323) to perform portfolio risk budgeting optimisation under two

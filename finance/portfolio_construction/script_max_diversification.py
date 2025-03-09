@@ -2,7 +2,7 @@ import warnings
 import numpy as np
 from scipy.optimize import minimize
 
-import portfolio_construction.scipy_port_constraints as pc
+import finance.portfolio_construction.scipy_port_constraints as pc
 
 '''
 Sample script to solve for a MDP (maximum diversification portfolio). Very similar to the implementation under the 
