@@ -1,9 +1,10 @@
 #kenchan323 Personal Projects
 
-trading (WIP)
-last updated - 2025-03
+General Infrastructure Build-out (WIP)
+last updated - 2025-03-09
 -
-    - A simple backtesting engine for assessing portfolio performance of a given timeseries of asset weight and asset prices
+    - A simple backtesting engine
+    - data loader(s) for financial market data
     - more to come...
 
 correlation_matrix
