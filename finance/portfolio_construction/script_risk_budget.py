@@ -111,36 +111,37 @@ def _risk_budget_obj_failed_attempt(cov, w_target):
                       constraints=[cp.sum(w) == 1,
                                    w >= 0])
 
-# Some dummy data
-x_target = [0.25, 0.25, 0.25, 0.25] # target risk budgeting distribution (here implying ERP)
-w_0 = [0.25, 0.25, 0.25, 0.25] # initial guesses
-# dummy 4 by 4 covariance matrix
-cov = [[1.23, 0.375, 0.7, 0.3],
-       [0.375, 1.22, 0.72, 0.135],
-       [0.7, 0.72, 3.21, -0.32],
-       [0.3, 0.135, -0.32, 0.52]]
+if __name__ == 'main':
+    # Some dummy data
+    x_target = [0.25, 0.25, 0.25, 0.25] # target risk budgeting distribution (here implying ERP)
+    w_0 = [0.25, 0.25, 0.25, 0.25] # initial guesses
+    # dummy 4 by 4 covariance matrix
+    cov = [[1.23, 0.375, 0.7, 0.3],
+           [0.375, 1.22, 0.72, 0.135],
+           [0.7, 0.72, 3.21, -0.32],
+           [0.3, 0.135, -0.32, 0.52]]
 
-# 1) Let's solve it as a non-convex problem (using scipy solver)
-cons = ({'type': 'eq', 'fun': pc.total_weight_constraint},
-        {'type': 'ineq', 'fun': pc.long_only_constraint})
-res = minimize(_non_convex_risk_budget_objective, w_0, args=(cov, x_target),
-               method='SLSQP', constraints=cons, options={'disp': True})
-w_sol_non_convex = res.x
+    # 1) Let's solve it as a non-convex problem (using scipy solver)
+    cons = ({'type': 'eq', 'fun': pc.total_weight_constraint},
+            {'type': 'ineq', 'fun': pc.long_only_constraint})
+    res = minimize(_non_convex_risk_budget_objective, w_0, args=(cov, x_target),
+                   method='SLSQP', constraints=cons, options={'disp': True})
+    w_sol_non_convex = res.x
 
-# 2) Structure as and solve as a convex problem (using cvxpy)
-w_sol_convex = solve_convex_risk_budget_obj_func(cov, x_target)
+    # 2) Structure as and solve as a convex problem (using cvxpy)
+    w_sol_convex = solve_convex_risk_budget_obj_func(cov, x_target)
 
-# We evaluate the (non-convex) objective functions using the two sets of solutions
-eval_obj_fuc_non_convex = _non_convex_risk_budget_objective(w_sol_non_convex, cov, x_target)
-eval_obj_fuc_convex = _non_convex_risk_budget_objective(w_sol_convex, cov, x_target)
+    # We evaluate the (non-convex) objective functions using the two sets of solutions
+    eval_obj_fuc_non_convex = _non_convex_risk_budget_objective(w_sol_non_convex, cov, x_target)
+    eval_obj_fuc_convex = _non_convex_risk_budget_objective(w_sol_convex, cov, x_target)
 
-print("Solution to the non-convex problem:")
-print([np.round(x, 5) for x in w_sol_non_convex])
-print("Solution to the convex problem:")
-print([np.round(x, 5) for x in w_sol_convex])
+    print("Solution to the non-convex problem:")
+    print([np.round(x, 5) for x in w_sol_non_convex])
+    print("Solution to the convex problem:")
+    print([np.round(x, 5) for x in w_sol_convex])
 
-assert eval_obj_fuc_convex < eval_obj_fuc_non_convex
-print("Evaluated with convex problem optimal solution < Evaluated with non-convex problem optimal solution")
-print(f"{eval_obj_fuc_convex} < {eval_obj_fuc_non_convex}")
-print("Solution to convex problem is MORE optimal than that to the non-convex problem")
+    assert eval_obj_fuc_convex < eval_obj_fuc_non_convex
+    print("Evaluated with convex problem optimal solution < Evaluated with non-convex problem optimal solution")
+    print(f"{eval_obj_fuc_convex} < {eval_obj_fuc_non_convex}")
+    print("Solution to convex problem is MORE optimal than that to the non-convex problem")
 
