@@ -147,41 +147,42 @@ def get_rec_bipart(cov, sort_ix):
             w[c_items1] *= 1 - alpha
     return w
 
-# dummy 4 by 4 covariance matrix
-cov = [[1.23, 0.375, 0.7, 0.3],
-       [0.375, 1.22, 0.72, 0.135],
-       [0.7, 0.72, 3.21, -0.32],
-       [0.3, 0.135, -0.32, 0.52]]
+if __name__ == 'main':
+    # dummy 4 by 4 covariance matrix
+    cov = [[1.23, 0.375, 0.7, 0.3],
+           [0.375, 1.22, 0.72, 0.135],
+           [0.7, 0.72, 3.21, -0.32],
+           [0.3, 0.135, -0.32, 0.52]]
 
-cov = np.array(cov)
-corr_mat = cov_to_corr_matrix(cov)
+    cov = np.array(cov)
+    corr_mat = cov_to_corr_matrix(cov)
 
-# distance matrix
-df_dist = pd.DataFrame(corr_mat).applymap(lambda x: distance_calc(x))
-'''
-The different type of linkage options available
-Single Linkage – the distance between two clusters it the minimum distance between any two points in the clusters
-Complete Linkage – the distance between two clusters is the maximum of the distance between any two points in the clusters
-Average Linkage – the distance between two clusters is the average of the distance between any two points in the clusters
-Ward Linkage – the distance between two clusters is the increase of the squared error from when two clusters are merged
-'''
-link = linkage(df_dist, 'single', optimal_ordering=True)
-# linkage matrix.
-# See format:
-# https://docs.scipy.org/doc/scipy/reference/generated/scipy.cluster.hierarchy.optimal_leaf_ordering.html#scipy.cluster.hierarchy.optimal_leaf_ordering
-Z = pd.DataFrame(link)
+    # distance matrix
+    df_dist = pd.DataFrame(corr_mat).applymap(lambda x: distance_calc(x))
+    '''
+    The different type of linkage options available
+    Single Linkage – the distance between two clusters it the minimum distance between any two points in the clusters
+    Complete Linkage – the distance between two clusters is the maximum of the distance between any two points in the clusters
+    Average Linkage – the distance between two clusters is the average of the distance between any two points in the clusters
+    Ward Linkage – the distance between two clusters is the increase of the squared error from when two clusters are merged
+    '''
+    link = linkage(df_dist, 'single', optimal_ordering=True)
+    # linkage matrix.
+    # See format:
+    # https://docs.scipy.org/doc/scipy/reference/generated/scipy.cluster.hierarchy.optimal_leaf_ordering.html#scipy.cluster.hierarchy.optimal_leaf_ordering
+    Z = pd.DataFrame(link)
 
-fig = plt.figure(figsize=(10, 5))
-dn = dendrogram(Z)
+    fig = plt.figure(figsize=(10, 5))
+    dn = dendrogram(Z)
 
-sorted_index = get_quasi_diag(link)
+    sorted_index = get_quasi_diag(link)
 
-weights = get_rec_bipart(pd.DataFrame(data=cov), sorted_index)
+    weights = get_rec_bipart(pd.DataFrame(data=cov), sorted_index)
 
-'''
-Sample output
-2    0.081317
-1    0.213957
-0    0.209404
-3    0.495322
-'''
+    '''
+    Sample output
+    2    0.081317
+    1    0.213957
+    0    0.209404
+    3    0.495322
+    '''

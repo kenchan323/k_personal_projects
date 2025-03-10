@@ -16,21 +16,85 @@ class Portfolio:
     """
     def __init__(self, h_ts: pd.DataFrame):
         """
-        :param h_ts: asset weight timeseries
+        :param h_ts: asset weight target timeseries
         """
         self._h_ts = h_ts
+
+    def check_asset_coverage(self, prices: pd.DataFrame):
+        return set(self._h_ts.keys()).issubset(set(prices.keys()))
+
+    def drifted_wgts(self, prices: pd.DataFrame):
+        """
+        Calculate the drifted weights on each date for which we have asset returns data for. On rebalance dates we
+        show the rebalance target weights
+        :rtype pd.DataFrame
+        """
+        _h = self._h_ts
+        assert self.check_asset_coverage(prices), 'positions must be covered by assets available in price data'
+        assert _h.index.min() > prices.index.min(), ('first date in positions must be within time range covered '
+                                                     'by prices data')
+
+        r_ts = prices.pct_change()
+
+        _h_temp = _h.reindex(r_ts.loc[_h.index.min():].index)
+        # we want the rebalance dates in the index too
+        _h = _h.reindex(_h.index.union(_h_temp.index))
+
+        for _idx, _r_d in enumerate(_h.index):
+            if _h.loc[_r_d].isna().all():
+                # on dates where only drifts happen
+                drifted = _h.iloc[_idx - 1] * (1 + r_ts.loc[_r_d])
+                drifted = drifted / drifted.sum()
+                _h.loc[_r_d] = drifted
+        return _h
+
+    def pre_rebalance_wgts(self, prices: pd.DataFrame):
+        """
+        Return the timeseries of pre-rebalance asset weights. E.g. the starting weights of the assets on rebalance
+        dates, just prior the rebalancing, having just experienced the market drifts of the day.
+        :rtype pd.DataFrame with the same dimension as self.h_ts
+        """
+        r_ts = prices.pct_change()
+        dw = self.drifted_wgts(prices)
+
+        h_pre_rebal = {}
+        for idx, rebal_dt in enumerate(self._h_ts.index):
+            if idx == 0:
+                # the first rebalance date
+                continue
+            prev_drifted = dw.loc[dw.index < rebal_dt].iloc[-1]  # the drifted weight of t-1
+            new_drifted = prev_drifted * (r_ts.loc[rebal_dt] + 1)  # apply today's drifts
+            new_drifted = new_drifted / new_drifted.sum()
+            h_pre_rebal[rebal_dt] = new_drifted
+        return pd.DataFrame.from_dict(h_pre_rebal, orient='index')
+
     @property
     def h_ts(self):
+        """
+        the rebalance target weights
+        """
         return self._h_ts
 
     def gross_exp(self):
+        """
+        gross exposures on each date
+        """
         return self.h_ts.abs().sum(axis=1)
 
     def name_count(self):
+        """
+        name count timeseries
+        """
         return self.h_ts.count(axis=1)
 
-    def turnover(self):
-        return self.h_ts.diff().abs()
+    def turnover(self, prices=None):
+        """
+        Portfolio turnover timeseries. If prices are supplied then turnover calculation will account impact of drifts
+        """
+        if prices:
+            self.h_ts.subs(self.pre_rebalance_wgts(prices)).abs().sum(axis=1)
+        else:
+            return self.h_ts.diff().abs().sum(axis=1)
 
 
 class TCost:
@@ -167,6 +231,16 @@ if __name__ == 'main':
     bkt = Backtest(pf, tcost, p_ts)
 
     perf = bkt.run()
+
+
+    p_hf_ts = pd.DataFrame(columns=['AAPL', 'MSFT', 'NVDA'],
+                        index=pd.date_range(start=pd.Timestamp(2024, 11, 29),
+                                            end=pd.Timestamp(2025, 2, 28), freq='BM'),
+                        data=[[239., 393., 112.],
+                              [246.88142583, 398.38228482, 120.40866141],
+                              [261.80621796, 408.21266778, 122.76499626],
+                              [289.62756761, 438.6417914, 114.35634255]])
+
 
     cum_pnl = perf.cumulative_agg_ts(True)
 

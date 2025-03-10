@@ -7,6 +7,8 @@ import typing
 import cachetools
 import operator
 
+from pandas.tseries.offsets import BDay
+
 import yfinance as yf
 
 
@@ -35,7 +37,8 @@ class YahooFinance(DataSource):
 
     @cachetools.cachedmethod(operator.attrgetter('cache'))
     def load_timeseries(self, ids: typing.Union[tuple, str], fld: str,
-                        start: pd.Timestamp = None, end: pd.Timestamp = None, **kwargs) -> pd.DataFrame:
+                        start: pd.Timestamp = None, end: pd.Timestamp = None,
+                        drop_time=True, **kwargs) -> pd.DataFrame:
         """
         :rtype: pd.DataFrame - keys are tickers and index are dates
         e.g.
@@ -48,9 +51,13 @@ class YahooFinance(DataSource):
                                                   f'the follow fields : {YahooFinance.HISTORY_FLDS}')
         if isinstance(ids, str):
             yf_ticker = yf.Ticker(ids)
-            return yf_ticker.history(start=start.strftime('%Y-%m-%d') if start else None,
-                                     end=end.strftime('%Y-%m-%d') if end else None,
+            data = yf_ticker.history(start=start.strftime('%Y-%m-%d') if start else None,
+                                     end=(end + BDay(1)).strftime('%Y-%m-%d') if end else None,
                                      **kwargs)[fld]
+            if drop_time:
+                # we drop the time (e.g. hours minutes) component in the index
+                data.index = data.index.map(lambda x: pd.Timestamp(x.date()))
+            return data
         elif isinstance(ids, tuple):
             data_out = {}
             for _id in ids:

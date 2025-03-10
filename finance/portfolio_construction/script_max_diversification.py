@@ -65,17 +65,18 @@ def solve_mdp_weights(w_0, cov, bnd=None, long_only=True):
                    method='SLSQP', constraints=cons)
     return [w_opt for w_opt in res.x]
 
-w_0 = [0.25, 0.25, 0.25, 0.25] # initial guesses
+if __name__ == 'main':
+    w_0 = [0.25, 0.25, 0.25, 0.25] # initial guesses
 
-# dummy 4 by 4 covariance matrix
-cov = [[1.23, 0.375, 0.7, 0.3],
-       [0.375, 1.22, 0.72, 0.135],
-       [0.7, 0.72, 3.21, -0.32],
-       [0.3, 0.135, -0.32, 0.52]]
+    # dummy 4 by 4 covariance matrix
+    cov = [[1.23, 0.375, 0.7, 0.3],
+           [0.375, 1.22, 0.72, 0.135],
+           [0.7, 0.72, 3.21, -0.32],
+           [0.3, 0.135, -0.32, 0.52]]
 
-# Say I specify some bounds as I don't want a portfolio that is too concentrated (any stock to have > 50% weight)
-solution_mdp = solve_mdp_weights(w_0, cov,
-                                 bnd=[(0, 0.5), (0, 0.5), (0, 0.5), (0, 0.5)],
-                                 long_only=True)
+    # Say I specify some bounds as I don't want a portfolio that is too concentrated (any stock to have > 50% weight)
+    solution_mdp = solve_mdp_weights(w_0, cov,
+                                     bnd=[(0, 0.5), (0, 0.5), (0, 0.5), (0, 0.5)],
+                                     long_only=True)
 
 
