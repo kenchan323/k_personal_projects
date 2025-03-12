@@ -1,0 +1,10 @@
+db:
+  finance:
+    loc: lmdb://../../db/finance.adb
+    libraries:
+      prices: prices
+      fields:
+        yahoo_finance: ['Open', 'High', 'Low', 'Close']
+
+  misc:
+    loc: lmdb://../../db/misc.adb
