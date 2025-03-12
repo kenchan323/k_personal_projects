@@ -1,9 +1,10 @@
 # kenchan323 Personal Projects
 
 ### General Infrastructure Build-out (WIP)
-- [last updated - 2025-03-09]
+- [last updated - 2025-03-12]
     - A simple backtesting engine
     - data loader(s) for financial market data
+    - simple ETL pipeline using Arctic DB
     - more to come...
 
 ### correlation_matrix
@@ -18,7 +19,6 @@
     of these k topics.
     LDA is a topic modelling technique within the domain of Natural Lanaguage Processing.
 
-    
 ### portfolio_construction
 - [last updated - 2021]
     - script_risk_budget.py: To solve for portfolio risk budgeting optimal solutions using both convex and non-convex 
