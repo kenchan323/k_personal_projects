@@ -37,7 +37,7 @@ class YahooFinance(DataSource):
 
     @cachetools.cachedmethod(operator.attrgetter('cache'))
     def load_timeseries(self, ids: typing.Union[tuple, str], fld: typing.Union[str, None] = 'Close',
-                        start: pd.Timestamp = None, end: pd.Timestamp = None,
+                        start: pd.Timestamp = None, end: pd.Timestamp = pd.Timestamp.now(),
                         drop_time=True, **kwargs) -> pd.DataFrame:
         """
         fld can be any from the list of HISTORY_FLDS. Or if None then we return all of the fields.
@@ -67,7 +67,7 @@ class YahooFinance(DataSource):
 
             if fld is not None:
                 data = data[fld]
-            return data
+            return data.loc[:end]
         elif isinstance(ids, tuple):
             data_out = {}
             for _id in ids:
@@ -77,7 +77,7 @@ class YahooFinance(DataSource):
                 # multi-index column [(Ticker1, Field1), (Ticker1, Field2), ..., (TickerN, FieldK)]
                 return pd.concat({k: pd.DataFrame(v) for k, v in data_out.items()}, names=['TICKER', 'FIELD'], axis=1)
             else:
-                return pd.concat(data_out, axis=1)
+                return pd.concat(data_out, axis=1).loc[:end]
         else:
             raise ValueError('ids must be either str or list of str')
 
