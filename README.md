@@ -1,7 +1,7 @@
 # kenchan323 Personal Projects
 
 ### General Infrastructure Build-out (WIP)
-- [last updated - 2025-03-12]
+- [last updated - 2025-03-16]
     - A simple backtesting engine
     - data loader(s) for financial market data
     - simple ETL pipeline using Arctic DB

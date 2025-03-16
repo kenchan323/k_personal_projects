@@ -1,10 +1,13 @@
-db:
-  finance:
-    loc: lmdb://../../db/finance.adb
-    libraries:
-      prices: prices
+finance:
+  loc: lmdb://../../db/finance.adb
+  asset: # library
+    prices: # symbol
       fields:
         yahoo_finance: ['Open', 'High', 'Low', 'Close']
+    meta: # symbol
+      fields:
+          yahoo_finance: ['currency', 'quoteType', 'symbol', 'region', 'typeDisp', 'shortName', 'longName',
+                          'underlyingSymbol', 'exchange', 'messageBoardId', 'exchangeTimezoneName', 'market']
 
-  misc:
-    loc: lmdb://../../db/misc.adb
+misc:
+  loc: lmdb://../../db/misc.adb
