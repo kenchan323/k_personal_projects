@@ -66,14 +66,46 @@ class ETLFromSource:
         #TODO - to define how to read existing data and work out the incremental downloads requirement for appending
         pass
 
+    def _chunking(self, chunk_size, elements):
+        if chunk_size < len(elements):
+            return np.array_split(elements, chunk_size)
+        else:
+            print('chunk larger than size of tickers to iterate over. Overriding chunk with the counts of tickers')
+            return np.array_split(elements, len(elements))
 
-class YahooPricesETL(ETLFromSource):
+
+class ArticDbETL(ETLFromSource):
+    _LIBRARY = ''
+    _TABLE = ''
+
+    def read_data(self):
+        arctic_db = adb.Arctic(self.db_config[self.db_name]['loc'])
+        return arctic_db.get_library(self._LIBRARY, create_if_missing=False).read(self._TABLE).data
+
+    def _load(self, data, wipe_existing=False):
+        arctic_db = adb.Arctic(self.db_config[self.db_name]['loc'])
+
+        # asset (LIBRARY) ---> prices (DF)
+        asset_library = arctic_db.get_library(self._LIBRARY, create_if_missing=True)
+
+        table_path = f"{self.db_name}//{self._LIBRARY}//{self._TABLE}"
+
+        if wipe_existing:
+            asset_library.delete(self._TABLE)
+            print(f'Wiping existing data in {table_path}...')
+
+        print(f'Pushing data ({len(data)} row) to {table_path}...')
+        asset_library.write(self._TABLE, data)
+        print(f'Pushed data ({len(data)} row) to {table_path}')
+
+
+class YahooPricesETL(ArticDbETL):
     """
     Defining the ETL pipeline of loading YahooFinance API security prices data are extracted, transformed and
     pushed to a local ArcticDB database instance
     """
-    _TABLE = 'prices'
     _LIBRARY = 'asset'
+    _TABLE = 'prices'
 
     def _extract(self):
         tickers = self.load_config[self.db_name]['universe']
@@ -84,7 +116,8 @@ class YahooPricesETL(ETLFromSource):
         chunk_size = table_config.get('chunk_size', 1)
         sleep_sec = table_config.get('sleep_sec', 0)
 
-        chunks = np.array_split(tickers, chunk_size)
+        chunks = self._chunking(chunk_size, tickers)
+
         _out = []
         kwargs = table_config.get('kwargs', {})
 
@@ -109,30 +142,15 @@ class YahooPricesETL(ETLFromSource):
         return _add_fixed_val_col(prices, {'SOURCE': 'YahooFinance',
                                                   'TIMESTAMP': datetime.datetime.now().replace(microsecond=0)})
 
-    def _load(self, data, wipe_existing=False):
-        arctic_db = adb.Arctic(self.db_config[self.db_name]['loc'])
 
-        # asset (LIBRARY) ---> prices (DF)
-        asset_library = arctic_db.get_library(self._LIBRARY, create_if_missing=True)
-
-        table_path = f"{self.db_name}//{self._LIBRARY}//{self._TABLE}"
-
-        if wipe_existing:
-            asset_library.delete(self._TABLE)
-            print(f'Wiping existing data in {table_path}...')
-
-        print(f'Pushing data ({len(data)} row) to {table_path}...')
-        asset_library.write(self._TABLE, data)
-        print(f'Pushed data ({len(data)} row) to {table_path}')
-
-    def read_data(self):
-        arctic_db = adb.Arctic(self.db_config[self.db_name]['loc'])
-        return arctic_db.get_library(self._LIBRARY, create_if_missing=True).read(self._TABLE).data
-
-
-class YahooInfoETL(ETLFromSource):
+class YahooInfoETL(ArticDbETL):
+    _LIBRARY = 'asset'
+    _TABLE = 'meta'
 
     def _extract(self):
+        """
+        :rtype pd.DataFrame : K by N
+        """
         tickers = self.load_config[self.db_name]['universe']
         table_config = self.load_config[self.db_name][self._LIBRARY]['symbols'][self._TABLE]
         yf = utils.YahooFinance(enable_cache=True)
@@ -141,62 +159,35 @@ class YahooInfoETL(ETLFromSource):
         chunk_size = table_config.get('chunk_size', 1)
         sleep_sec = table_config.get('sleep_sec', 0)
 
-        chunks = np.array_split(tickers, chunk_size)
-        _out = []
+        chunks = self._chunking(chunk_size, tickers)
+        _out = {}
         kwargs = table_config.get('kwargs', {})
-
         for _idx, _chunk in enumerate(chunks):
             print(f'Loading data from source......chunk {_idx + 1} out of {len(chunks)}')
             time.sleep(sleep_sec)
-            _out.append(yf.load_meta(tuple(_chunk),
-                                           fld='info',
-                                           **kwargs))
-        return pd.concat(_out, axis=1)
+            _out.update(yf.load_meta(tuple(_chunk),
+                                     fld='info',
+                                     **kwargs))
+        return pd.DataFrame(_out)
+
+    def _transform(self, data):
+        fields = etl_obj.db_config[etl_obj.db_name][etl_obj._LIBRARY][etl_obj._TABLE]['fields']['yahoo_finance']
+        data = data.loc[fields]
+
+        data_long = data.T.reset_index().melt(id_vars='index',
+                                              var_name='FIELD', value_name='VALUE').rename({'index': 'TICKER'}, axis=1)
+        data_long['TICKER'] = data_long['TICKER'].map(str)
+
+        return _add_fixed_val_col(data_long, {'SOURCE': 'YahooFinance',
+                                              'TIMESTAMP': datetime.datetime.now().replace(microsecond=0)})
+
 
 if __name__ == 'main':
 
-    etl_obj = YahooPricesETL(db_name='finance',
+    etl_obj = YahooInfoETL(db_name='finance',
                              db_config=r"C:\dev\k_personal_projects\utils\data\config\db.yaml",
                              load_config=r"C:\dev\k_personal_projects\utils\data\config\load_universe.yaml")
     etl_obj.run_etl(wipe_existing=True)
 
+    etl_obj.read_data()
 
-    """
-    db_cfg = yaml.safe_load(Path(r"C:\dev\k_personal_projects\utils\data\config\db.yaml").read_text())
-
-    arctic_db = adb.Arctic(db_cfg['db']['finance']['loc'])
-
-    # asset (LIBRARY) ---> prices (DF)
-    asset_library = arctic_db.get_library('asset', create_if_missing=True)
-
-    # EXTRACT
-    yf = utils.YahooFinance(enable_cache=True)
-    df = yf.load_timeseries(tuple(['^SPX', '^IXIC', '0001.HK', '^VIX', '^MOVE', '^990100-USD-STRD']),
-                            fld=None,
-                            start=pd.Timestamp(1980,12,31),
-                            end=pd.Timestamp(2025, 3, 12))
-    # TRANSFORM
-    df_long = df.stack().stack()
-    df_long.name = 'VALUE'
-    df_long = df_long.reset_index()
-
-    FIELDS = db_cfg['db']['finance']['libraries']['fields']['yahoo_finance']
-
-    prices = df_long.query('FIELD in @FIELDS')
-
-    prices = _add_fixed_val_col(prices, {'SOURCE':'YahooFinance',
-                                         'TIMESTAMP': datetime.datetime.now().replace(microsecond=0)})
-
-    # LOAD
-    asset_library.write('prices', prices)
-
-
-    # if ac.has_library('asset'):
-    #     ac.delete_library('asset')
-    #
-    # if asset_library.has_symbol('prices'):
-    #     asset_library.delete('prices')
-
-    #_prices = asset_library.read('prices').data
-    
-    """
