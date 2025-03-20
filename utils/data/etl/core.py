@@ -16,6 +16,11 @@ import arcticdb as adb
 import utils
 import imp
 
+DB_CONFIG_MAP = {'YahooFinance':
+                  {'db_name': 'finance',
+                   'db_config': r"C:\dev\k_personal_projects\utils\data\etl\config\db.yaml",
+                   'load_config': r"C:\dev\k_personal_projects\utils\data\etl\config\load_universe.yaml"}
+              }
 
 def _add_fixed_val_col(df: pd.DataFrame, col_val: typing.Dict[str, float] = {}):
     """
@@ -33,7 +38,7 @@ class ETLFromSource:
     """
     Abstract class to define how an implementation of a ETLFromSource should look
     """
-    def __init__(self, db_name: str, db_config: str, load_config: str):
+    def __init__(self, db_name: str, db_config: str, load_config: str=None):
         """
         :param db_name: database name
         :param db_config: str path to database config yaml
@@ -75,27 +80,30 @@ class ETLFromSource:
 
 
 class ArticDbETL(ETLFromSource):
-    _LIBRARY = ''
-    _TABLE = ''
+    LIBRARY = ''
+    TABLE = ''
+
+    def get_adb_lib(self):
+        return adb.Arctic(self.db_config[self.db_name]['loc']).get_library(self.LIBRARY, create_if_missing=False)
 
     def read_data(self):
-        arctic_db = adb.Arctic(self.db_config[self.db_name]['loc'])
-        return arctic_db.get_library(self._LIBRARY, create_if_missing=False).read(self._TABLE).data
+        adb_library = self.get_adb_library()
+        return adb_library.read(self.LIBRARY).data
 
     def _load(self, data, wipe_existing=False):
         arctic_db = adb.Arctic(self.db_config[self.db_name]['loc'])
 
         # asset (LIBRARY) ---> prices (DF)
-        asset_library = arctic_db.get_library(self._LIBRARY, create_if_missing=True)
+        asset_library = arctic_db.get_library(self.LIBRARY, create_if_missing=True)
 
-        table_path = f"{self.db_name}//{self._LIBRARY}//{self._TABLE}"
+        table_path = f"{self.db_name}//{self.LIBRARY}//{self.LIBRARY}"
 
         if wipe_existing:
-            asset_library.delete(self._TABLE)
+            asset_library.delete(self.TABLE)
             print(f'Wiping existing data in {table_path}...')
 
         print(f'Pushing data ({len(data)} row) to {table_path}...')
-        asset_library.write(self._TABLE, data)
+        asset_library.write(self.TABLE, data)
         print(f'Pushed data ({len(data)} row) to {table_path}')
 
 
@@ -104,12 +112,13 @@ class YahooPricesETL(ArticDbETL):
     Defining the ETL pipeline of loading YahooFinance API security prices data are extracted, transformed and
     pushed to a local ArcticDB database instance
     """
-    _LIBRARY = 'asset'
-    _TABLE = 'prices'
+    LIBRARY = 'asset'
+    TABLE = 'prices'
 
     def _extract(self):
+        assert self.load_config is not None, 'load_config must be specified to perform data extraction!'
         tickers = self.load_config[self.db_name]['universe']
-        table_config = self.load_config[self.db_name][self._LIBRARY]['symbols'][self._TABLE]
+        table_config = self.load_config[self.db_name][self.LIBRARY]['symbols'][self.TABLE]
         yf = utils.YahooFinance(enable_cache=True)
 
         # if no chunk_size defined, assuming chunk_size == 1 (e.g. do all tickers in one attempt)
@@ -135,7 +144,7 @@ class YahooPricesETL(ArticDbETL):
         data_long = data_long.reset_index()
         data_long['TICKER'] = data_long['TICKER'].map(str)
 
-        fields = self.db_config[self.db_name][self._LIBRARY][self._TABLE]['fields']['yahoo_finance']
+        fields = self.db_config[self.db_name][self.LIBRARY][self.TABLE]['fields']['yahoo_finance']
 
         prices = data_long.query('FIELD in @fields')
 
@@ -144,15 +153,16 @@ class YahooPricesETL(ArticDbETL):
 
 
 class YahooInfoETL(ArticDbETL):
-    _LIBRARY = 'asset'
-    _TABLE = 'meta'
+    LIBRARY = 'asset'
+    TABLE = 'meta'
 
     def _extract(self):
         """
         :rtype pd.DataFrame : K by N
         """
+        assert self.load_config is not None, 'load_config must be specified to perform data extraction!'
         tickers = self.load_config[self.db_name]['universe']
-        table_config = self.load_config[self.db_name][self._LIBRARY]['symbols'][self._TABLE]
+        table_config = self.load_config[self.db_name][self.LIBRARY]['symbols'][self.TABLE]
         yf = utils.YahooFinance(enable_cache=True)
 
         # if no chunk_size defined, assuming chunk_size == 1 (e.g. do all tickers in one attempt)
@@ -171,7 +181,7 @@ class YahooInfoETL(ArticDbETL):
         return pd.DataFrame(_out)
 
     def _transform(self, data):
-        fields = etl_obj.db_config[etl_obj.db_name][etl_obj._LIBRARY][etl_obj._TABLE]['fields']['yahoo_finance']
+        fields = self.db_config[self.db_name][self.LIBRARY][self.TABLE]['fields']['yahoo_finance']
         data = data.loc[fields]
 
         data_long = data.T.reset_index().melt(id_vars='index',
@@ -184,10 +194,11 @@ class YahooInfoETL(ArticDbETL):
 
 if __name__ == 'main':
 
-    etl_obj = YahooInfoETL(db_name='finance',
-                             db_config=r"C:\dev\k_personal_projects\utils\data\config\db.yaml",
-                             load_config=r"C:\dev\k_personal_projects\utils\data\config\load_universe.yaml")
-    etl_obj.run_etl(wipe_existing=True)
+    # etl_yprices_obj = YahooPricesETL(**DB_CONFIG_MAP['YahooFinance'])
+    # etl_yprices_obj.run_etl(wipe_existing=True)
 
-    etl_obj.read_data()
+    etl_yinfo_obj = YahooInfoETL(**DB_CONFIG_MAP['YahooFinance'])
+    etl_yinfo_obj.run_etl(wipe_existing=True)
+
+    etl_yinfo_obj.read_data()
 
