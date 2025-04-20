@@ -1,5 +1,7 @@
 finance:
-  loc: lmdb://../../db/finance.adb
+  # relative path is very dangerous
+  #loc: lmdb://../../db/finance.adb
+  loc: lmdb://C:/dev/k_personal_projects/db/finance.adb
   asset: # library
     prices: # symbol
       fields:
