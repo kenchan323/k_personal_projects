@@ -9,7 +9,12 @@ import operator
 
 from pandas.tseries.offsets import BDay
 
+from utils.data.etl.core import YahooPricesETL, DB_CONFIG_MAP
+
 import yfinance as yf
+import arcticdb as adb
+
+YF_HISTORY_FLDS = ['Open', 'High', 'Low', 'Close', 'Volume', 'Dividends', 'Stock Splits']
 
 
 class DataSource:
@@ -28,12 +33,14 @@ class DataSource:
     def load_meta(self, ids, fld, **kwargs):
         pass
 
+    def load_info(self, ids, **kwargs):
+        pass
 
-class YahooFinance(DataSource):
+
+class YahooFinanceAPI(DataSource):
     """
     Wrapper around the yfinance library
     """
-    HISTORY_FLDS = ['Open', 'High', 'Low', 'Close', 'Volume', 'Dividends', 'Stock Splits']
 
     @cachetools.cachedmethod(operator.attrgetter('cache'))
     def load_timeseries(self, ids: typing.Union[tuple, str], fld: typing.Union[str, None] = 'Close',
@@ -46,14 +53,13 @@ class YahooFinance(DataSource):
             - if fld is None, then columns are Multi-Index keys
                     e.g. [(Ticker1, Field1), (Ticker1, Field2), ..., (TickerN, FieldK)]
         e.g.
-            yd_data = YahooFinance()
-            df = yd_data.load_meta(tuple(['NVDA', 'AAPL']), fld='Close',
+            yf_api = YahooFinance()
+            df = yf_api.load_meta(tuple(['NVDA', 'AAPL']), fld='Close',
                                    start=pd.Timestamp(2025, 1, 30),
                                    end=pd.Timestamp(2025, 2, 28))
         """
         if fld is not None:
-            assert fld in YahooFinance.HISTORY_FLDS, (f'load_timeseries only accepts '
-                                                      f'the follow fields : {YahooFinance.HISTORY_FLDS}')
+            assert fld in YF_HISTORY_FLDS, f'load_timeseries only accepts the follow fields : {YF_HISTORY_FLDS}'
 
         if isinstance(ids, str):
             yf_ticker = yf.Ticker(ids)
@@ -86,8 +92,8 @@ class YahooFinance(DataSource):
         """
         :rtype:  Dict[str, pd.DataFrame] - keys are tickers
         e.g.
-            yd_data = YahooFinance()
-            df = yd_data.load_meta(tuple(['NVDA', 'AAPL']), 'dividends')
+            yf_api = YahooFinanceAPI()
+            df = yf_api.load_meta(tuple(['NVDA', 'AAPL']), 'dividends')
         """
         assert hasattr(yf.Ticker, fld), 'fld needs to be an accessible property of yfinance.Ticker'
         if isinstance(ids, str):
@@ -103,4 +109,57 @@ class YahooFinance(DataSource):
                             start: pd.Timestamp = None, end: pd.Timestamp = None,
                         drop_time=True, **kwargs) -> pd.DataFrame:
         pass
+
+    def load_info(self, ids, **kwargs):
+        """
+         :rtype:  pd.DataFrame - columns are tickers, id are fields
+            yf_api = YahooFinanceAPI()
+            df = yf_api.load_info(tuple(['NVDA', 'AAPL']))
+        """
+        return pd.DataFrame(self.load_meta(ids, fld='info'))
+
+
+class YahooFinanceDB(DataSource):
+    """
+    Loading data from the internally onboarded YahooFinance data
+    """
+    @cachetools.cachedmethod(operator.attrgetter('cache'))
+    def load_timeseries(self, ids: typing.Union[tuple, str], fld: str = 'Close',
+                        start: pd.Timestamp = None, end: pd.Timestamp = pd.Timestamp.now(),
+                        drop_time=True, **kwargs) -> pd.DataFrame:
+        """
+        Return a wide format prices timeseries DataFrame from am internally onboarded YahooFinance data source
+        e.g.
+        yf_db = YahooFinanceDB()
+        df = yf_db.load_timeseries(tuple(['^SPX', '^FTSE']), fld='Close',
+                                   start=pd.Timestamp(2013,1,1), end=pd.Timestamp(2025,1,1))
+        """
+        if fld is not None:
+            assert fld in YF_HISTORY_FLDS, f'load_timeseries only accepts the follow fields : {YF_HISTORY_FLDS}'
+
+        if isinstance(ids, str):
+            ids = [ids]
+
+        adb_lib = YahooPricesETL(**DB_CONFIG_MAP['YahooFinance']).get_adb_lib()
+        q = adb.QueryBuilder()
+        q = q[(q['FIELD'] == fld) & q['TICKER'].isin(ids)]
+        df = adb_lib.read('prices', query_builder=q).data
+
+        return df.pivot(index='DATE', columns='TICKER', values='VALUE').loc[start: end]
+
+    def load_info(self, ids, **kwargs):
+        """
+        Return a wide format ticker info DataFrame from am internally onboarded YahooFinance data source
+        e.g.
+        yf_db = YahooFinanceDB()
+        df = yf_db.load_info(ids=['^SPX', '^VIX'])
+        """
+        if isinstance(ids, str):
+            ids = [ids]
+
+        adb_lib = YahooPricesETL(**DB_CONFIG_MAP['YahooFinance']).get_adb_lib()
+        q = adb.QueryBuilder()
+        q = q[q['TICKER'].isin(ids)]
+        long_df = adb_lib.read('meta', query_builder=q).data
+        return long_df.set_index(['FIELD', 'TICKER'])['VALUE'].unstack()
 

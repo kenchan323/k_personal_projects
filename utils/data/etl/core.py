@@ -22,6 +22,7 @@ DB_CONFIG_MAP = {'YahooFinance':
                    'load_config': r"C:\dev\k_personal_projects\utils\data\etl\config\load_universe.yaml"}
               }
 
+
 def _add_fixed_val_col(df: pd.DataFrame, col_val: typing.Dict[str, float] = {}):
     """
     To add columns to a dataframe with a constant value
@@ -87,8 +88,8 @@ class ArticDbETL(ETLFromSource):
         return adb.Arctic(self.db_config[self.db_name]['loc']).get_library(self.LIBRARY, create_if_missing=False)
 
     def read_data(self):
-        adb_library = self.get_adb_library()
-        return adb_library.read(self.LIBRARY).data
+        adb_library = self.get_adb_lib()
+        return adb_library.read(self.TABLE).data
 
     def _load(self, data, wipe_existing=False):
         arctic_db = adb.Arctic(self.db_config[self.db_name]['loc'])
@@ -96,7 +97,7 @@ class ArticDbETL(ETLFromSource):
         # asset (LIBRARY) ---> prices (DF)
         asset_library = arctic_db.get_library(self.LIBRARY, create_if_missing=True)
 
-        table_path = f"{self.db_name}//{self.LIBRARY}//{self.LIBRARY}"
+        table_path = f"{self.db_name}//{self.LIBRARY}//{self.TABLE}"
 
         if wipe_existing:
             asset_library.delete(self.TABLE)
@@ -119,7 +120,7 @@ class YahooPricesETL(ArticDbETL):
         assert self.load_config is not None, 'load_config must be specified to perform data extraction!'
         tickers = self.load_config[self.db_name]['universe']
         table_config = self.load_config[self.db_name][self.LIBRARY]['symbols'][self.TABLE]
-        yf = utils.YahooFinance(enable_cache=True)
+        yf = utils.YahooFinanceAPI(enable_cache=True)
 
         # if no chunk_size defined, assuming chunk_size == 1 (e.g. do all tickers in one attempt)
         chunk_size = table_config.get('chunk_size', 1)
@@ -163,7 +164,7 @@ class YahooInfoETL(ArticDbETL):
         assert self.load_config is not None, 'load_config must be specified to perform data extraction!'
         tickers = self.load_config[self.db_name]['universe']
         table_config = self.load_config[self.db_name][self.LIBRARY]['symbols'][self.TABLE]
-        yf = utils.YahooFinance(enable_cache=True)
+        yf = utils.YahooFinanceAPI(enable_cache=True)
 
         # if no chunk_size defined, assuming chunk_size == 1 (e.g. do all tickers in one attempt)
         chunk_size = table_config.get('chunk_size', 1)
@@ -191,14 +192,4 @@ class YahooInfoETL(ArticDbETL):
         return _add_fixed_val_col(data_long, {'SOURCE': 'YahooFinance',
                                               'TIMESTAMP': datetime.datetime.now().replace(microsecond=0)})
 
-
-if __name__ == 'main':
-
-    # etl_yprices_obj = YahooPricesETL(**DB_CONFIG_MAP['YahooFinance'])
-    # etl_yprices_obj.run_etl(wipe_existing=True)
-
-    etl_yinfo_obj = YahooInfoETL(**DB_CONFIG_MAP['YahooFinance'])
-    etl_yinfo_obj.run_etl(wipe_existing=True)
-
-    etl_yinfo_obj.read_data()
 
