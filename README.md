@@ -1,10 +1,13 @@
 # kenchan323 Personal Projects
 
 ### General Infrastructure Build-out (WIP)
-- [last updated - 2025-03-17]
-    - A simple backtesting engine
+- [last updated - 2025-04-20]
+    - A simple backtesting engine supporting T-Cost calculation
+      - see `utils\notebook\portfolio_example.ipynb`
     - data loader(s) for financial market data
+       - see `utils\notebook\data_example.ipynb`
     - simple ETL pipeline using Arctic DB
+       - see `utils\data\etl\bin\run_yf_etl.py`
     - more to come...
 
 ### correlation_matrix

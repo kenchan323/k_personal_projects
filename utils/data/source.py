@@ -123,7 +123,7 @@ class YahooFinanceDB(DataSource):
     """
     Loading data from the internally onboarded YahooFinance data
     """
-    @cachetools.cachedmethod(operator.attrgetter('cache'))
+
     def load_timeseries(self, ids: typing.Union[tuple, str], fld: str = 'Close',
                         start: pd.Timestamp = None, end: pd.Timestamp = pd.Timestamp.now(),
                         drop_time=True, **kwargs) -> pd.DataFrame:

@@ -67,9 +67,6 @@ finance: # DB name
     - ^VIX
     - ^MOVE
 
-
-
-
     # MSCI indices
 #    - ^125904-USD-STRD # MSCI Europe
     - ^990100-USD-STRD # MSCI World

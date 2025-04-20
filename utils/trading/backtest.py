@@ -31,7 +31,7 @@ class Portfolio:
         """
         _h = self._h_ts
         assert self.check_asset_coverage(prices), 'positions must be covered by assets available in price data'
-        assert _h.index.min() > prices.index.min(), ('first date in positions must be within time range covered '
+        assert _h.index.min() >= prices.index.min(), ('first date in positions must be within time range covered '
                                                      'by prices data')
 
         r_ts = prices.pct_change()
@@ -87,14 +87,23 @@ class Portfolio:
         """
         return self.h_ts.count(axis=1)
 
-    def turnover(self, prices=None):
+    def turnover(self, prices=None, agg=True):
         """
         Portfolio turnover timeseries. If prices are supplied then turnover calculation will account impact of drifts
         """
-        if prices:
-            self.h_ts.subs(self.pre_rebalance_wgts(prices)).abs().sum(axis=1)
+        if prices is not None:
+            # post-rebalance weight minus pre-rebalance drifted weights = turnover
+            turns = self.h_ts.sub(self.pre_rebalance_wgts(prices)).abs()
+            if agg:
+                return turns.sum(axis=1)
+            else:
+                return turns
         else:
-            return self.h_ts.diff().abs().sum(axis=1)
+            turns = self.h_ts.diff().abs()
+            if agg:
+                return turns.sum(axis=1)
+            else:
+                return turns
 
 
 class TCost:
@@ -109,29 +118,31 @@ class TCost:
         """
         self.tcost = tcost
 
-    def pnl_hit(self, portfolio: Portfolio):
+    def tcost_hit(self, portfolio: Portfolio, prices: pd.DataFrame):
         """
         Calculate the pnl hit e.g. the performance detraction by assets by time periods incurred from turnover
         :param portfolio: Portfolio object to apply the t-cost hit on
+        :param prices: asset prices on each date
         :rtype pd.DataFrame
         """
+        _h_ts = portfolio.h_ts
         if isinstance(self.tcost, float):
             # apply same tcost across assets across time
-            tc_ts = (h_ts / h_ts) * self.tcost
+            tc_ts = (_h_ts / _h_ts) * self.tcost
         elif isinstance(self.tcost, dict):
-            assert set(self.tcost.keys()).issubset(set(h_ts.keys())), \
+            assert set(self.tcost.keys()).issubset(set(_h_ts.keys())), \
                 't-cost dict keys must cover all assets in holdings'
-            tc_ts = h_ts * np.nan
+            tc_ts = _h_ts  * np.nan
             tc_ts.iloc[0, :] = pd.Series(self.tcost)
             tc_ts = tc_ts.ffill()
         elif isinstance(self.tcost, pd.DataFrame):
-            assert (h_ts/h_ts).equals(self.tcost/self.tcost), ('For a tcost timeseries DataFrame, index and columns '
+            assert (_h_ts/_h_ts).equals(self.tcost/self.tcost), ('For a tcost timeseries DataFrame, index and columns '
                                                                'must be identical to the index/columns of holdings timeseries')
             tc_ts = self.tcost
         else:
             raise ValueError('only types float/dict/pd.DataFrame are accepted for tcost')
 
-        tcost_hit = portfolio.turnover() * tc_ts.values
+        tcost_hit = portfolio.turnover(agg=False, prices=prices) * tc_ts.values
         return tcost_hit.fillna(0)
 
 
@@ -171,11 +182,19 @@ class Performance:
         """
         return (self.agg_ts(post_tc) + 1).cumprod() - 1
 
+    def underwater_ts(self,  post_tc: bool = False):
+        cum_ts = self.cumulative_agg_ts(post_tc) + 1
+        return (cum_ts / cum_ts.expanding().max()) - 1
+
+#    def
     def sharpe(self, post_tc: bool = False):
         raise NotImplementedError
 
     def ir(self, rfr):
         raise NotImplementedError
+
+    def max_dd(self, post_tc: bool = False):
+        return abs(self.underwater_ts(post_tc).min())
 
 
 class Backtest:
@@ -188,8 +207,10 @@ class Backtest:
         :param prices: asset prices on each date
         :param tcost: TCost to be applied
         """
+        assert portfolio.h_ts.index.max() <= prices.index.max(), 'latest position date must be covered by prices date index'
+        assert portfolio.h_ts.index.min() >= prices.index.min(), 'earliest position date must be covered by prices date index'
         self.portfolio = portfolio
-        self.prices_ts = prices
+        self.prices_ts = prices.ffill()
         self.tcost = tcost if tcost is not None else TCost(0)
 
     def run(self):
@@ -197,50 +218,77 @@ class Backtest:
         Run the backtest
         :rtype Performance
         """
-        r_ts = self.prices_ts.pct_change()
+        r_ts = self.prices_ts.reindex(self.portfolio.h_ts.index).pct_change()
         h_ts_shifted = self.portfolio.h_ts.shift(1)
-
-        pnl_asset_ts = h_ts_shifted * r_ts.values
-        return Performance(pnl_asset_ts, tc_hit_ts=self.tcost.pnl_hit(self.portfolio), benchmark=None)
-
-
-if __name__ == 'main':
-    tc = 0.004
-
-    h_ts = pd.DataFrame(index=[pd.date_range(start=pd.Timestamp(2024, 11, 29),
-                                             end=pd.Timestamp(2025, 2, 28),
-                                             freq='BM')],
-                        columns=['AAPL', 'MSFT', 'NVDA'],
-                        data=[[0.25, 0.25, 0.5],
-                              [0.3, 0.6, 0.1],
-                              [0.23, 0.3, 0.47],
-                              [0.4, 0.2, 0.4]])
-
-    p_ts = pd.DataFrame(columns=['AAPL', 'MSFT', 'NVDA'],
-                        index=pd.date_range(start=pd.Timestamp(2024, 11, 29),
-                                            end=pd.Timestamp(2025, 2, 28), freq='BM'),
-                        data=[[239., 393., 112.],
-                              [246.88142583, 398.38228482, 120.40866141],
-                              [261.80621796, 408.21266778, 122.76499626],
-                              [289.62756761, 438.6417914, 114.35634255]])
-
-    pf = Portfolio(h_ts)
-
-    tcost = TCost(0.01)
-
-    bkt = Backtest(pf, tcost, p_ts)
-
-    perf = bkt.run()
+        r_ts_h_indexed = r_ts.ffill().reindex(h_ts_shifted.index, method='ffill')
+        pnl_asset_ts = h_ts_shifted * r_ts_h_indexed.values
+        tc_hit_ts = self.tcost.tcost_hit(self.portfolio, self.prices_ts)
+        return Performance(pnl_asset_ts,
+                           tc_hit_ts,
+                           benchmark=None)
 
 
-    p_hf_ts = pd.DataFrame(columns=['AAPL', 'MSFT', 'NVDA'],
-                        index=pd.date_range(start=pd.Timestamp(2024, 11, 29),
-                                            end=pd.Timestamp(2025, 2, 28), freq='BM'),
-                        data=[[239., 393., 112.],
-                              [246.88142583, 398.38228482, 120.40866141],
-                              [261.80621796, 408.21266778, 122.76499626],
-                              [289.62756761, 438.6417914, 114.35634255]])
+#if __name__ == 'main':
+# tc = 0.004
+#
+# h_ts = pd.DataFrame(index=[pd.date_range(start=pd.Timestamp(2024, 11, 29),
+#                                          end=pd.Timestamp(2025, 2, 28),
+#                                          freq='BM')],
+#                     columns=['AAPL', 'MSFT', 'NVDA'],
+#                     data=[[0.25, 0.25, 0.5],
+#                           [0.3, 0.6, 0.1],
+#                           [0.23, 0.3, 0.47],
+#                           [0.4, 0.2, 0.4]])
+#
+# p_ts = pd.DataFrame(columns=['AAPL', 'MSFT', 'NVDA'],
+#                     index=pd.date_range(start=pd.Timestamp(2024, 11, 29),
+#                                         end=pd.Timestamp(2025, 2, 28), freq='BM'),
+#                     data=[[239., 393., 112.],
+#                           [246.88142583, 398.38228482, 120.40866141],
+#                           [261.80621796, 408.21266778, 122.76499626],
+#                           [289.62756761, 438.6417914, 114.35634255]])
 
+# pf = Portfolio(h_ts)
+#
+# tcost = TCost(0.01)
+#
+# bkt = Backtest(pf, p_ts, tcost)
+#
+# perf = bkt.run()
+#
+#
+# p_hf_ts = pd.DataFrame(columns=['AAPL', 'MSFT', 'NVDA'],
+#                     index=pd.date_range(start=pd.Timestamp(2024, 11, 29),
+#                                         end=pd.Timestamp(2025, 2, 28), freq='BM'),
+#                     data=[[239., 393., 112.],
+#                           [246.88142583, 398.38228482, 120.40866141],
+#                           [261.80621796, 408.21266778, 122.76499626],
+#                           [289.62756761, 438.6417914, 114.35634255]])
+#
+#
+# cum_pnl = perf.cumulative_agg_ts(True)
 
-    cum_pnl = perf.cumulative_agg_ts(True)
-
+# import numpy as np
+# import pandas as pd
+# from utils.data.etl.core import YahooInfoETL, YahooPricesETL,  DB_CONFIG_MAP
+# etl_yprices_obj = YahooPricesETL(**DB_CONFIG_MAP['YahooFinance'])
+# #etl_yprices_obj.run_etl(wipe_existing=True)
+# raw_prices = etl_yprices_obj.read_data()
+#
+# df = raw_prices.query('(FIELD == "Close") & ((TICKER == "^SPX") | (TICKER == "^STOXX50E"))').copy()
+# df['VALUE'] = df['VALUE'].replace('NaN', np.nan)
+# index_prices_ts = df.pivot(index='DATE', columns='TICKER',values='VALUE')
+# _date_range = pd.date_range(pd.Timestamp(2010, 12, 31), pd.Timestamp.now(), freq='BM')
+# bm_index_prices_ts = index_prices_ts.ffill(limit=1).reindex(_date_range, method='ffill')
+# # 50% 50%
+# h_df = bm_index_prices_ts/bm_index_prices_ts * 0.5
+#
+# pf = Portfolio(h_df)
+#
+# #pf.drifted_wgts(index_prices_ts)
+#
+# tcost = TCost(0.001)
+#
+# bkt = Backtest(pf, index_prices_ts, tcost)
+#
+# perf = bkt.run()
