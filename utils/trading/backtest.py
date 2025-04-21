@@ -9,6 +9,8 @@ import numpy as np
 import typing
 from typing import Union
 
+import utils.mapping.constants as cst
+
 
 class Portfolio:
     """
@@ -87,13 +89,13 @@ class Portfolio:
         """
         return self.h_ts.count(axis=1)
 
-    def turnover(self, prices=None, agg=True):
+    def turnover(self, prices_ts=None, agg=True):
         """
-        Portfolio turnover timeseries. If prices are supplied then turnover calculation will account impact of drifts
+        Portfolio 2-way turnover timeseries. If prices are supplied then turnover calculation will account impact of drifts
         """
-        if prices is not None:
+        if prices_ts is not None:
             # post-rebalance weight minus pre-rebalance drifted weights = turnover
-            turns = self.h_ts.sub(self.pre_rebalance_wgts(prices)).abs()
+            turns = self.h_ts.sub(self.pre_rebalance_wgts(prices_ts)).abs()
             if agg:
                 return turns.sum(axis=1)
             else:
@@ -118,11 +120,11 @@ class TCost:
         """
         self.tcost = tcost
 
-    def tcost_hit(self, portfolio: Portfolio, prices: pd.DataFrame):
+    def tcost_hit(self, portfolio: Portfolio, prices_ts: pd.DataFrame):
         """
         Calculate the pnl hit e.g. the performance detraction by assets by time periods incurred from turnover
         :param portfolio: Portfolio object to apply the t-cost hit on
-        :param prices: asset prices on each date
+        :param prices_ts: asset prices on each date
         :rtype pd.DataFrame
         """
         _h_ts = portfolio.h_ts
@@ -142,7 +144,7 @@ class TCost:
         else:
             raise ValueError('only types float/dict/pd.DataFrame are accepted for tcost')
 
-        tcost_hit = portfolio.turnover(agg=False, prices=prices) * tc_ts.values
+        tcost_hit = portfolio.turnover(agg=False, prices_ts=prices_ts) * tc_ts.values
         return tcost_hit.fillna(0)
 
 
@@ -150,8 +152,19 @@ class Performance:
     """
     Performance class where various performance metrics calculations are functionalised
     """
+
+    @staticmethod
+    def from_price_ts(prices_ts: pd.DataFrame, forced_freq: str=None):
+        assert isinstance(prices_ts, pd.DataFrame), 'prices must be a DataFrame with 1 column of assert prices'
+        _pf = Portfolio(prices_ts/prices_ts) # just holdings of one's
+        if forced_freq:
+            prices_ts = prices_ts.resample(forced_freq).last()
+        return Performance(pnl_asset_ts=prices_ts.pct_change(), portfolio=_pf, prices_ts=prices_ts)
+
     def __init__(self, pnl_asset_ts: pd.DataFrame,
-                 tc_hit_ts: pd.DataFrame,
+                 portfolio: Portfolio,
+                 prices_ts: pd.DataFrame,
+                 tc_hit_ts: pd.DataFrame = TCost(0),
                  benchmark: typing.Optional['Performance'] = None):
         """
         :param pnl_asset_ts: PnL of each asset during each time-period
@@ -160,8 +173,12 @@ class Performance:
         """
         # https://peps.python.org/pep-0484/#forward-references
         self.pnl_asset_ts = pnl_asset_ts
+        self.portfolio = portfolio
+        self.prices_ts = prices_ts
         self.tc_hit_ts = tc_hit_ts
         self.benchmark = benchmark
+        self.periods = len(pnl_asset_ts)
+        self.ret_freqstr = self.pnl_asset_ts.index.freqstr
 
     def agg_ts(self, post_tc: bool = False):
         """
@@ -170,8 +187,11 @@ class Performance:
         """
         agg_pnl_ts = self.pnl_asset_ts.sub(self.tc_hit_ts).sum(axis=1) if post_tc else self.pnl_asset_ts.sum(axis=1)
         if self.benchmark:
+            assert self.ret_freqstr == self.benchmark.ret_freqstr, \
+                (f'Performance return freq ({self.ret_freq}) does not match with that of '
+                 f'benchmark performance ({self.benchmark.ret_freq})')
             #TODO expose post_tc flag for self.benchmark
-            agg_pnl_ts = agg_pnl_ts.sub(self.benchmark.agg_ts())
+            agg_pnl_ts = agg_pnl_ts.sub(self.benchmark.agg_ts().reindex(agg_pnl_ts.index))
 
         return agg_pnl_ts
 
@@ -186,15 +206,54 @@ class Performance:
         cum_ts = self.cumulative_agg_ts(post_tc) + 1
         return (cum_ts / cum_ts.expanding().max()) - 1
 
-#    def
-    def sharpe(self, post_tc: bool = False):
-        raise NotImplementedError
+    def annualised_return(self, post_tc:bool = False, ret_type='geometric'):
+        annu_factor = cst.annualisation_factor(self.ret_freqstr)
 
-    def ir(self, rfr):
-        raise NotImplementedError
+        if ret_type == 'geometric':
+            # e.g. 1 for 100%
+            _cumul = self.cumulative_agg_ts(post_tc)
+            n_periods = self.periods / annu_factor  # e.g. if 18 BM in returns, this becomes 1.5
+            return np.power(1+_cumul.iloc[-1], 1 / n_periods) -1
+        elif ret_type == 'arithmetic':
+            rets = self.agg_ts(post_tc)
+            return rets.mean() * annu_factor
+        else:
+            raise ValueError(f'{ret_type=} not recognised')
+
+    def annualised_vol(self, post_tc:bool = False):
+        annu_factor = cst.annualisation_factor(self.ret_freqstr)
+        tr = self.agg_ts(post_tc) # e.g. 1 for 100%
+        return tr.std() * np.sqrt(annu_factor)
+
+    def ir(self, post_tc:bool = False, ret_type='geometric'):
+        return self.annualised_return(post_tc, ret_type) / self.annualised_vol(post_tc)
 
     def max_dd(self, post_tc: bool = False):
         return abs(self.underwater_ts(post_tc).min())
+
+    def current_dd(self, post_tc: bool = False):
+        return abs(self.underwater_ts(post_tc).iloc[-1])
+
+    def stat_summary(self, post_tc:bool = False):
+        ir = self.ir(post_tc)
+        ann_r = self.annualised_return(post_tc)
+        ann_vol = self.annualised_vol(post_tc)
+
+        annu_factor = cst.annualisation_factor(self.ret_freqstr)
+        turnover = self.portfolio.turnover(prices_ts=self.prices_ts).sum()
+        ann_turn = turnover/self.periods * annu_factor
+        ann_tc = 0 if not post_tc else ((self.tc_hit_ts.sum().sum() / self.periods) * annu_factor)
+
+        max_dd = self.max_dd(post_tc)
+        current_dd = self.current_dd(post_tc)
+        return pd.Series({'IR'                : ir,
+                          'Return (ann.)'     : ann_r,
+                          'TE (ann.)'         : ann_vol,
+                          'Two-way Turnover (ann.)'   : ann_turn,
+                          'T-Cost Hit (ann.)' : ann_tc,
+                          'Max Drawdown'      : max_dd,
+                          'Current Drawdown'  :current_dd,
+                          'Type'              : 'Relative' if self.benchmark is not None else 'Absolute'})
 
 
 class Backtest:
@@ -213,7 +272,7 @@ class Backtest:
         self.prices_ts = prices.ffill()
         self.tcost = tcost if tcost is not None else TCost(0)
 
-    def run(self):
+    def run(self, benchmark=None):
         """
         Run the backtest
         :rtype Performance
@@ -224,8 +283,10 @@ class Backtest:
         pnl_asset_ts = h_ts_shifted * r_ts_h_indexed.values
         tc_hit_ts = self.tcost.tcost_hit(self.portfolio, self.prices_ts)
         return Performance(pnl_asset_ts,
-                           tc_hit_ts,
-                           benchmark=None)
+                           portfolio=self.portfolio,
+                           prices_ts=self.prices_ts,
+                           tc_hit_ts=tc_hit_ts,
+                           benchmark=benchmark)
 
 
 #if __name__ == 'main':
