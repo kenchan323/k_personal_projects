@@ -66,7 +66,7 @@ class Portfolio:
                 continue
             prev_drifted = dw.loc[dw.index < rebal_dt].iloc[-1]  # the drifted weight of t-1
             new_drifted = prev_drifted * (r_ts.loc[rebal_dt] + 1)  # apply today's drifts
-            new_drifted = new_drifted / new_drifted.sum()
+            new_drifted = (new_drifted / new_drifted.sum()).fillna(0) # the fillna(0) could break things!
             h_pre_rebal[rebal_dt] = new_drifted
         return pd.DataFrame.from_dict(h_pre_rebal, orient='index')
 
@@ -130,7 +130,8 @@ class TCost:
         _h_ts = portfolio.h_ts
         if isinstance(self.tcost, float):
             # apply same tcost across assets across time
-            tc_ts = (_h_ts / _h_ts) * self.tcost
+            tc_ts = pd.DataFrame(index=_h_ts.index).reindex_like(_h_ts)
+            tc_ts = tc_ts.fillna(self.tcost)
         elif isinstance(self.tcost, dict):
             assert set(self.tcost.keys()).issubset(set(_h_ts.keys())), \
                 't-cost dict keys must cover all assets in holdings'
@@ -225,7 +226,7 @@ class Performance:
         tr = self.agg_ts(post_tc) # e.g. 1 for 100%
         return tr.std() * np.sqrt(annu_factor)
 
-    def ir(self, post_tc:bool = False, ret_type='geometric'):
+    def sharpe(self, post_tc:bool = False, ret_type='geometric'):
         return self.annualised_return(post_tc, ret_type) / self.annualised_vol(post_tc)
 
     def max_dd(self, post_tc: bool = False):
@@ -235,7 +236,7 @@ class Performance:
         return abs(self.underwater_ts(post_tc).iloc[-1])
 
     def stat_summary(self, post_tc:bool = False):
-        ir = self.ir(post_tc)
+        sharpe = self.sharpe(post_tc)
         ann_r = self.annualised_return(post_tc)
         ann_vol = self.annualised_vol(post_tc)
 
@@ -246,14 +247,16 @@ class Performance:
 
         max_dd = self.max_dd(post_tc)
         current_dd = self.current_dd(post_tc)
-        return pd.Series({'IR'                : ir,
+        return pd.Series({'Sharpe'                : sharpe,
                           'Return (ann.)'     : ann_r,
                           'TE (ann.)'         : ann_vol,
                           'Two-way Turnover (ann.)'   : ann_turn,
                           'T-Cost Hit (ann.)' : ann_tc,
                           'Max Drawdown'      : max_dd,
                           'Current Drawdown'  :current_dd,
-                          'Type'              : 'Relative' if self.benchmark is not None else 'Absolute'})
+                          }
+                         # 'Type'              : 'Relative' if self.benchmark is not None else 'Absolute'}
+                         )
 
 
 class Backtest:
