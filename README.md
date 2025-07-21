@@ -10,10 +10,9 @@
        - see `utils\data\etl\bin\run_yf_etl.py`
     - more to come...
 
-### correlation_matrix
-- [last updated - 2019]
-    - Performing correlation clustering on Dow Jones stock returns then visualise clustering
-    using tsne (t-distributed stochastic neighbouring) technique.
+### risk_illustration
+- [last updated - 2025-7-21]
+    - Performing correlation clustering on a snapshot portfolio of the ARK Innovation ETF fund
     
 ### lda_nlp
 - [last updated - 2019]
