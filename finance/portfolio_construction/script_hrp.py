@@ -79,7 +79,7 @@ def get_quasi_diag(link):
 
         df0 = pd.Series(link[j, 1], index=i + 1)
 
-        sort_ix = sort_ix.append(df0)
+        sort_ix = pd.concat([sort_ix, df0])
         sort_ix = sort_ix.sort_index()
 
         sort_ix.index = range(sort_ix.shape[0])
@@ -158,7 +158,7 @@ if __name__ == 'main':
     corr_mat = cov_to_corr_matrix(cov)
 
     # distance matrix
-    df_dist = pd.DataFrame(corr_mat).applymap(lambda x: distance_calc(x))
+    df_dist = pd.DataFrame(corr_mat).map(lambda x: distance_calc(x))
     '''
     The different type of linkage options available
     Single Linkage – the distance between two clusters it the minimum distance between any two points in the clusters
