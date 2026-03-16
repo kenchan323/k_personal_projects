@@ -9,7 +9,7 @@ import operator
 
 from pandas.tseries.offsets import BDay
 
-from utils.data.etl.core import YahooPricesETL, DB_CONFIG_MAP
+from kutils.data.etl.core import YahooPricesETL, DB_CONFIG_MAP
 
 import yfinance as yf
 import arcticdb as adb
@@ -69,7 +69,7 @@ class YahooFinanceAPI(DataSource):
             data.index.name = 'DATE'
             if drop_time:
                 # we drop the time (e.g. hours minutes) component in the index
-                data.index = data.index.map(lambda x: pd.Timestamp(x.date()))
+                data.index = pd.to_datetime([x.date() for x in data.index])
 
             if fld is not None:
                 data = data[fld]

@@ -13,13 +13,12 @@ import pandas as pd
 import numpy as np
 import arcticdb as adb
 
-import utils
-import imp
+_CONFIG_DIR = Path(__file__).parent / 'config'
 
 DB_CONFIG_MAP = {'YahooFinance':
                   {'db_name': 'finance',
-                   'db_config': r"C:\dev\k_personal_projects\utils\data\etl\config\db.yaml",
-                   'load_config': r"C:\dev\k_personal_projects\utils\data\etl\config\load_universe.yaml"}
+                   'db_config': str(_CONFIG_DIR / 'db.yaml'),
+                   'load_config': str(_CONFIG_DIR / 'load_universe.yaml')}
               }
 
 
@@ -117,10 +116,11 @@ class YahooPricesETL(ArticDbETL):
     TABLE = 'prices'
 
     def _extract(self):
+        from kutils.data.source import YahooFinanceAPI
         assert self.load_config is not None, 'load_config must be specified to perform data extraction!'
         tickers = self.load_config[self.db_name]['universe']
         table_config = self.load_config[self.db_name][self.LIBRARY]['symbols'][self.TABLE]
-        yf = utils.YahooFinanceAPI(enable_cache=True)
+        yf = YahooFinanceAPI(enable_cache=True)
 
         # if no chunk_size defined, assuming chunk_size == 1 (e.g. do all tickers in one attempt)
         chunk_size = table_config.get('chunk_size', 1)
@@ -140,6 +140,7 @@ class YahooPricesETL(ArticDbETL):
         return pd.concat(_out, axis=1)
 
     def _transform(self, data):
+        data.index.rename('DATE', inplace=True)
         data_long = data.stack().stack()
         data_long.name = 'VALUE'
         data_long = data_long.reset_index()
@@ -161,10 +162,11 @@ class YahooInfoETL(ArticDbETL):
         """
         :rtype pd.DataFrame : K by N
         """
+        from kutils.data.source import YahooFinanceAPI
         assert self.load_config is not None, 'load_config must be specified to perform data extraction!'
         tickers = self.load_config[self.db_name]['universe']
         table_config = self.load_config[self.db_name][self.LIBRARY]['symbols'][self.TABLE]
-        yf = utils.YahooFinanceAPI(enable_cache=True)
+        yf = YahooFinanceAPI(enable_cache=True)
 
         # if no chunk_size defined, assuming chunk_size == 1 (e.g. do all tickers in one attempt)
         chunk_size = table_config.get('chunk_size', 1)
