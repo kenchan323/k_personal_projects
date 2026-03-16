@@ -1,6 +1,6 @@
 import pandas as pd
 
-from utils.data.etl.core import YahooPricesETL, DB_CONFIG_MAP
+from kutils.data.etl.core import YahooPricesETL, DB_CONFIG_MAP
 
 import arcticdb as adb
 

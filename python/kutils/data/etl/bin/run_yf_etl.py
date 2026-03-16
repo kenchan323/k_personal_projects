@@ -17,7 +17,7 @@ Dependencies:
 - `YahooPricesETL` and `YahooInfoETL` classes from `utils.data.etl.core`.
 """
 
-from utils.data.etl.core import YahooPricesETL, YahooInfoETL, DB_CONFIG_MAP
+from kutils.data.etl.core import YahooPricesETL, YahooInfoETL, DB_CONFIG_MAP
 
 WIPE_EXISTING_DATA = True  # e.g. full reloading
 
